@@ -1,0 +1,10 @@
+[project]
+name = "track-id"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.32.4",
+    "typer>=0.16.0",
+]
