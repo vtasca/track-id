@@ -13,6 +13,7 @@ ID3_TAG_NAMES = {
     'TENC': 'Encoded By',
     'TSSE': 'Software/Hardware',
     'TXXX': 'Custom',
+    'APIC:': 'Artwork',
     'COMM': 'Comment',
     'USLT': 'Lyrics',
     'TSRC': 'ISRC',

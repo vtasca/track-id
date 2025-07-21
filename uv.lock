@@ -387,6 +387,7 @@ source = { editable = "." }
 dependencies = [
     { name = "mutagen" },
     { name = "requests" },
+    { name = "rich" },
     { name = "typer" },
     { name = "urllib3" },
 ]
@@ -401,6 +402,7 @@ dev = [
 requires-dist = [
     { name = "mutagen", specifier = ">=1.47.0" },
     { name = "requests", specifier = ">=2.32.4" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "typer", specifier = ">=0.16.0" },
     { name = "urllib3", specifier = "<2.0.0" },
 ]

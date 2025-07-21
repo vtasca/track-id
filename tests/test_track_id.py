@@ -26,40 +26,37 @@ class TestTrackIdCLI:
         assert result.exit_code == 0
         assert "info" in result.output.lower()
     
-    @patch('track_id.track_id.requests.post')
-    def test_search_command_success(self, mock_post, runner):
+    def test_enrich_command_exists(self, runner):
+        """Test that the enrich command exists"""
+        result = runner.invoke(app, ["enrich", "--help"])
+        assert result.exit_code == 0
+        assert "enrich" in result.output.lower()
+    
+    @patch('track_id.track_id.search_bandcamp')
+    def test_search_command_success(self, mock_search, runner):
         """Test search command with successful API response"""
         # Mock successful API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_search.return_value = {
             "results": [
                 {"title": "Test Track", "artist": "Test Artist"}
             ]
         }
-        mock_post.return_value = mock_response
         
         result = runner.invoke(app, ["search", "test track"])
         
         assert result.exit_code == 0
-        mock_post.assert_called_once()
-        # Verify the search text was passed correctly
-        call_args = mock_post.call_args
-        assert call_args[1]['json']['search_text'] == "test track"
+        mock_search.assert_called_once_with("test track")
     
-    @patch('track_id.track_id.requests.post')
-    def test_search_command_error(self, mock_post, runner):
+    @patch('track_id.track_id.search_bandcamp')
+    def test_search_command_error(self, mock_search, runner):
         """Test search command with API error"""
         # Mock failed API response
-        mock_response = Mock()
-        mock_response.status_code = 404
-        mock_response.text = "Not Found"
-        mock_post.return_value = mock_response
+        mock_search.side_effect = Exception("API Error")
         
         result = runner.invoke(app, ["search", "test track"])
         
-        assert result.exit_code == 0  # CLI doesn't exit on API errors
-        assert "Error: 404" in result.output
+        assert result.exit_code == 1
+        assert "Error:" in result.output
     
     def test_info_command_file_not_exists(self, runner):
         """Test info command with non-existent file"""
@@ -78,59 +75,143 @@ class TestTrackIdCLI:
         try:
             result = runner.invoke(app, ["info", temp_file])
             assert result.exit_code == 1
-            assert "not an MP3 file" in result.output
+            assert "not an MP3" in result.output
         finally:
             os.unlink(temp_file)
     
-    @patch('track_id.track_id.MP3')
-    @patch('track_id.track_id.ID3')
-    def test_info_command_success(self, mock_id3, mock_mp3, runner):
+    @patch('track_id.track_id.get_mp3_info')
+    @patch('track_id.track_id.get_mp3_metadata')
+    def test_info_command_success(self, mock_metadata, mock_info, runner):
         """Test info command with valid MP3 file"""
         # Mock MP3 file info
-        mock_audio = Mock()
-        mock_audio.info.length = 180.5  # 3 minutes 0.5 seconds
-        mock_audio.info.bitrate = 320000
-        mock_audio.info.sample_rate = 44100
-        mock_mp3.return_value = mock_audio
+        mock_info.return_value = {
+            'file_path': 'test.mp3',
+            'file_size': 1024000,
+            'duration_seconds': 180.5,
+            'bitrate': 320000,
+            'sample_rate': 44100
+        }
         
         # Mock ID3 tags
-        mock_id3_instance = Mock()
-        mock_id3_instance.items.return_value = [
-            ('TIT2', Mock(text=['Test Title'])),
-            ('TPE1', Mock(text=['Test Artist'])),
-            ('TALB', Mock(text=['Test Album']))
-        ]
-        mock_id3.return_value = mock_id3_instance
+        mock_metadata.return_value = {
+            'TIT2': 'Test Title',
+            'TPE1': 'Test Artist',
+            'TALB': 'Test Album'
+        }
         
-        # Mock file size
-        with patch('track_id.track_id.os.path.getsize', return_value=1024000):
-            with patch('track_id.track_id.os.path.exists', return_value=True):
-                result = runner.invoke(app, ["info", "test.mp3"])
+        result = runner.invoke(app, ["info", "test.mp3"])
         
         assert result.exit_code == 0
-        assert "test.mp3" in result.output
         assert "3:00" in result.output  # Duration
         assert "320 kbps" in result.output  # Bitrate
         assert "44100 Hz" in result.output  # Sample rate
         assert "Test Title" in result.output
         assert "Test Artist" in result.output
     
-    @patch('track_id.track_id.MP3')
-    def test_info_command_no_id3_tags(self, mock_mp3, runner):
+    @patch('track_id.track_id.get_mp3_info')
+    @patch('track_id.track_id.get_mp3_metadata')
+    def test_info_command_no_id3_tags(self, mock_metadata, mock_info, runner):
         """Test info command with MP3 file that has no ID3 tags"""
         # Mock MP3 file info
-        mock_audio = Mock()
-        mock_audio.info.length = 120.0
-        mock_audio.info.bitrate = 256000
-        mock_audio.info.sample_rate = 44100
-        mock_mp3.return_value = mock_audio
+        mock_info.return_value = {
+            'file_path': 'test.mp3',
+            'file_size': 512000,
+            'duration_seconds': 120.0,
+            'bitrate': 256000,
+            'sample_rate': 44100
+        }
         
-        # Mock ID3 to raise exception (no tags)
-        with patch('track_id.track_id.ID3', side_effect=Exception("No ID3 tags")):
-            with patch('track_id.track_id.os.path.getsize', return_value=512000):
-                with patch('track_id.track_id.os.path.exists', return_value=True):
-                    result = runner.invoke(app, ["info", "test.mp3"])
+        # Mock empty ID3 tags
+        mock_metadata.return_value = {}
+        
+        result = runner.invoke(app, ["info", "test.mp3"])
         
         assert result.exit_code == 0
         assert "No metadata tags found" in result.output
+    
+    @patch('track_id.track_id.enrich_mp3_file')
+    def test_enrich_command_success(self, mock_enrich, runner):
+        """Test enrich command with successful enrichment"""
+        # Mock successful enrichment result
+        mock_enrich.return_value = {
+            'file_path': 'test.mp3',
+            'search_query': 'Test Artist Test Title',
+            'bandcamp_track': {
+                'band_name': 'Test Artist',
+                'name': 'Test Title',
+                'album_name': 'Test Album',
+                'art_id': '1234567890'
+            },
+            'existing_metadata': {
+                'TIT2': 'Test Title',
+                'TPE1': 'Test Artist'
+            },
+            'bandcamp_metadata': {
+                'TIT2': 'Test Title',
+                'TPE1': 'Test Artist',
+                'TALB': 'Test Album',
+                'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+            },
+            'added_metadata': {
+                'TALB': 'Test Album',
+                'artwork': 'Added album artwork (image/jpeg)'
+            }
+        }
+        
+        result = runner.invoke(app, ["enrich", "test.mp3"])
+        
+        assert result.exit_code == 0
+        assert "Successfully enriched" in result.output
+        assert "Test Artist - Test Title" in result.output
+        assert "New Metadata Added" in result.output
+        assert "Test Album" in result.output
+        assert "Added album artwork" in result.output
+    
+    @patch('track_id.track_id.enrich_mp3_file')
+    def test_enrich_command_error(self, mock_enrich, runner):
+        """Test enrich command with error"""
+        # Mock error
+        mock_enrich.side_effect = ValueError("Cannot enrich file: missing artist (TPE1) or title (TIT2) metadata")
+        
+        result = runner.invoke(app, ["enrich", "test.mp3"])
+        
+        assert result.exit_code == 1
+        assert "Error enriching MP3 file" in result.output
+        assert "missing artist" in result.output
+        
+    @patch('track_id.track_id.enrich_mp3_file')
+    def test_enrich_command_with_artwork(self, mock_enrich, runner):
+        """Test enrich command with artwork functionality"""
+        # Mock successful enrichment result with artwork
+        mock_enrich.return_value = {
+            'file_path': 'test.mp3',
+            'search_query': 'Test Artist Test Title',
+            'bandcamp_track': {
+                'band_name': 'Test Artist',
+                'name': 'Test Title',
+                'album_name': 'Test Album',
+                'art_id': '1234567890'
+            },
+            'existing_metadata': {
+                'TIT2': 'Test Title',
+                'TPE1': 'Test Artist',
+                'TALB': 'Test Album'  # Already has album
+            },
+            'bandcamp_metadata': {
+                'TIT2': 'Test Title',
+                'TPE1': 'Test Artist',
+                'TALB': 'Test Album',
+                'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+            },
+            'added_metadata': {
+                'artwork': 'Added album artwork (image/jpeg)'
+            }
+        }
+        
+        result = runner.invoke(app, ["enrich", "test.mp3"])
+        
+        assert result.exit_code == 0
+        assert "Successfully enriched" in result.output
+        assert "Added album artwork" in result.output
+        assert "image/jpeg" in result.output
         

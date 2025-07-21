@@ -1,9 +1,18 @@
 import typer
-import requests
-import os
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3
+from rich.console import Console
+from rich.json import JSON
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
 from .id3_tags import ID3_TAG_NAMES
+from .bandcamp_api import (
+    search_bandcamp, 
+    get_mp3_info, 
+    get_mp3_metadata, 
+    enrich_mp3_file
+)
+
+console = Console()
 
 app = typer.Typer()
 
@@ -11,92 +20,131 @@ app = typer.Typer()
 def search(search_text: str = typer.Argument(..., help="The text to search for")):
     """Search for a track on Bandcamp"""
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/123.0.6312.86 Safari/537.36"
-        ),
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;"
-            "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-    }
-
-
-    payload = {
-        'fan_id': None,
-        'full_page': False,
-        'search_filter': '',
-        'search_text': search_text
-    }
-
-    response = requests.post('https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic',
-                headers=headers, json=payload)
-    
-    if response.status_code == 200:
-        print(response.json())
-    else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+    try:
+        data = search_bandcamp(search_text)
+        console.print(Panel.fit(
+            JSON.from_data(data),
+            title="[bold blue]Bandcamp Search Results[/bold blue]",
+            border_style="blue"
+        ))
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        raise typer.Exit(1)
 
 @app.command()
 def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")):
     """Display information about an MP3 file"""
     
-    if not os.path.exists(file_path):
-        typer.echo(f"Error: File '{file_path}' does not exist", err=True)
-        raise typer.Exit(1)
-    
-    if not file_path.lower().endswith('.mp3'):
-        typer.echo(f"Error: File '{file_path}' is not an MP3 file", err=True)
-        raise typer.Exit(1)
-    
     try:
-        audio = MP3(file_path)
+        # Get file information
+        file_info = get_mp3_info(file_path)
         
-        file_size = os.path.getsize(file_path)
-        duration_seconds = audio.info.length if audio.info else 0
+        # Get metadata
+        tags = get_mp3_metadata(file_path)
         
+        # Format duration
+        duration_seconds = file_info['duration_seconds']
         minutes = int(duration_seconds // 60)
         seconds = int(duration_seconds % 60)
         duration_str = f"{minutes}:{seconds:02d}"
         
-        # Get ID3 tags if available
-        tags = {}
-        try:
-            id3 = ID3(file_path)
-            for key, value in id3.items():
-                if hasattr(value, 'text'):
-                    tags[key] = value.text[0] if value.text else ""
-        except:
-            pass
+        # Create a table for file information
+        info_table = Table(title="[bold green]MP3 File Information[/bold green]", border_style="green")
+        info_table.add_column("Property", style="cyan", no_wrap=True)
+        info_table.add_column("Value", style="white")
         
-        # Display information
-        typer.echo(f"File: {file_path}")
-        typer.echo(f"Size: {file_size:,} bytes ({file_size / 1024 / 1024:.2f} MB)")
-        typer.echo(f"Duration: {duration_str}")
-        typer.echo(f"Bitrate: {audio.info.bitrate // 1000} kbps" if audio.info else "Unknown")
-        typer.echo(f"Sample Rate: {audio.info.sample_rate} Hz" if audio.info else "Unknown")
+        info_table.add_row("File", file_info['file_path'])
+        info_table.add_row("Size", f"{file_info['file_size']:,} bytes ({file_info['file_size'] / 1024 / 1024:.2f} MB)")
+        info_table.add_row("Duration", duration_str)
+        info_table.add_row("Bitrate", f"{file_info['bitrate'] // 1000} kbps" if file_info['bitrate'] else "Unknown")
+        info_table.add_row("Sample Rate", f"{file_info['sample_rate']} Hz" if file_info['sample_rate'] else "Unknown")
+        
+        console.print(info_table)
         
         if tags:
-            typer.echo("\nMetadata:")
+            # Create a table for metadata
+            metadata_table = Table(title="[bold yellow]Metadata Tags[/bold yellow]", border_style="yellow")
+            metadata_table.add_column("Tag", style="cyan", no_wrap=True)
+            metadata_table.add_column("ID3 Key", style="dim")
+            metadata_table.add_column("Value", style="white")
+            
             for key, value in tags.items():
                 readable_name = ID3_TAG_NAMES.get(key, key)
-                typer.echo(f"  {readable_name} ({key}): {value}")
+                metadata_table.add_row(readable_name, key, str(value))
+            
+            console.print(metadata_table)
         else:
-            typer.echo("\nNo metadata tags found")
+            console.print(Panel("No metadata tags found", title="[yellow]Metadata[/yellow]", border_style="yellow"))
             
     except Exception as e:
-        typer.echo(f"Error reading MP3 file: {e}", err=True)
+        console.print(f"[bold red]Error reading MP3 file: {e}[/bold red]")
+        raise typer.Exit(1)
+
+@app.command()
+def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with Bandcamp metadata")):
+    """Enrich an MP3 file with metadata from Bandcamp"""
+    
+    try:
+        # Enrich the file
+        result = enrich_mp3_file(file_path)
+        
+        # Display results
+        console.print(Panel(
+            f"[bold green]Successfully enriched: {result['file_path']}[/bold green]",
+            title="[bold green]Enrichment Complete[/bold green]",
+            border_style="green"
+        ))
+        
+        # Show search details
+        search_panel = Panel(
+            f"[cyan]Search Query:[/cyan] {result['search_query']}\n"
+            f"[cyan]Found Track:[/cyan] {result['bandcamp_track'].get('band_name', 'Unknown')} - {result['bandcamp_track'].get('name', 'Unknown')} (URL: {result['bandcamp_track'].get('item_url_path', 'Unknown')})\n"
+            f"[cyan]Album:[/cyan] {result['bandcamp_track'].get('album_name', 'Unknown')}",
+            title="[bold blue]Search Results[/bold blue]",
+            border_style="blue"
+        )
+        console.print(search_panel)
+        
+        # Show what metadata was added
+        # Filter out "skipped" entries to only show actually added metadata
+        actual_added_metadata = {k: v for k, v in result['added_metadata'].items() 
+                               if not str(v).startswith('Artwork already exists') and 
+                               not str(v).startswith('No new metadata')}
+        
+        if actual_added_metadata:
+            added_table = Table(title="[bold green]New Metadata Added[/bold green]", border_style="green")
+            added_table.add_column("Tag", style="cyan", no_wrap=True)
+            added_table.add_column("ID3 Key", style="dim")
+            added_table.add_column("Value", style="white")
+            
+            for key, value in actual_added_metadata.items():
+                readable_name = ID3_TAG_NAMES.get(key, key)
+                added_table.add_row(readable_name, key, str(value))
+            
+            console.print(added_table)
+        else:
+            console.print(Panel(
+                "No new metadata was added - all fields already had values",
+                title="[yellow]No Changes[/yellow]",
+                border_style="yellow"
+            ))
+        
+        # Show existing metadata for comparison
+        if result['existing_metadata']:
+            existing_table = Table(title="[bold yellow]Existing Metadata[/bold yellow]", border_style="yellow")
+            existing_table.add_column("Tag", style="cyan", no_wrap=True)
+            existing_table.add_column("ID3 Key", style="dim")
+            existing_table.add_column("Value", style="white")
+            
+            for key, value in result['existing_metadata'].items():
+                readable_name = ID3_TAG_NAMES.get(key, key)
+                existing_table.add_row(readable_name, key, str(value))
+            
+            console.print(existing_table)
+            
+    except Exception as e:
+        console.print(f"[bold red]Error enriching MP3 file: {e}[/bold red]")
+        
         raise typer.Exit(1)
 
 if __name__ == "__main__":

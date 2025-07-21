@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# MacOS files
+.DS_Store
+
 # Audio files
 *.mp3
 *.m4a
