@@ -1,6 +1,6 @@
-# Track-ID
+# track-id
 
-A Python CLI tool for searching tracks on Bandcamp and displaying MP3 file information.
+A nifty Python CLI tool for searching tracks on Bandcamp and displaying MP3 file information.
 
 ## Features
 
@@ -9,9 +9,21 @@ A Python CLI tool for searching tracks on Bandcamp and displaying MP3 file infor
 
 ## Installation
 
+### Using uv
+
+The easiest way to get started is by installing `track-id` as a tool:
+```bash
+uv tool install git+https://github.com/vtasca/track-id
+track-id search "Chaos In The CBD"
+track-id info "path/to/your/file.mp3"
+```
+
+### Clone and install locally
+
+Mainly for development purposes:
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/vtasca/track-id
 cd track-id
 
 # Install dependencies
@@ -23,13 +35,13 @@ uv sync
 ### Search for tracks on Bandcamp
 
 ```bash
-uv run track-id search "Chaos In The CBD"
+track-id search "Chaos In The CBD"
 ```
 
 ### Display MP3 file information
 
 ```bash
-uv run track-id info "path/to/your/file.mp3"
+track-id info "path/to/your/file.mp3"
 ```
 
 ## Development
@@ -118,7 +130,3 @@ track-id/
 2. Ensure all tests pass
 3. Follow the existing code style
 4. Update documentation as needed
-
-## License
-
-[Add your license here]
