@@ -1,5 +1,5 @@
 [project]
-name = "track-id"
+name = "track_id"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -8,4 +8,25 @@ dependencies = [
     "requests>=2.32.4",
     "typer>=0.16.0",
     "urllib3<2.0.0",
+    "mutagen>=1.47.0",
 ]
+
+[project.scripts]
+track-id = "track_id.track_id:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["track_id"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-v"]
