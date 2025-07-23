@@ -7,9 +7,11 @@ from rich.text import Text
 from .id3_tags import ID3_TAG_NAMES
 from .bandcamp_api import (
     search_bandcamp, 
-    get_mp3_info, 
-    get_mp3_metadata, 
     enrich_mp3_file
+)
+from .mp3_utils import (
+    get_mp3_info, 
+    get_mp3_metadata
 )
 
 console = Console()

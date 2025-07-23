@@ -1,17 +1,19 @@
 import pytest
 from unittest.mock import Mock, patch
-from track_id.bandcamp_api import (
+from track_id.mp3_utils import (
     download_artwork, 
     get_mime_type, 
-    extract_bandcamp_metadata,
     update_mp3_metadata
+)
+from track_id.bandcamp_api import (
+    extract_bandcamp_metadata
 )
 
 
 class TestArtworkFunctionality:
     """Test cases for artwork functionality"""
     
-    @patch('track_id.bandcamp_api.requests.get')
+    @patch('track_id.mp3_utils.requests.get')
     def test_download_artwork_success(self, mock_get):
         """Test successful artwork download"""
         # Mock successful response
@@ -25,7 +27,7 @@ class TestArtworkFunctionality:
         assert result == b'fake_image_data'
         mock_get.assert_called_once()
     
-    @patch('track_id.bandcamp_api.requests.get')
+    @patch('track_id.mp3_utils.requests.get')
     def test_download_artwork_failure(self, mock_get):
         """Test artwork download failure"""
         # Mock failed response
