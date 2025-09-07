@@ -1,0 +1,25 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Cursor Rules for track-id project
+
+## Project Setup
+- This is a Python project using uv for dependency management
+- Main package: `track_id`
+- Entry point: `track_id.track_id:app`
+- Python version: >=3.9
+
+## Commands
+- Install dependencies: `uv sync`
+- Run the app: `uv run track-id`
+- Run tests: `uv run pytest`
+- Add dependency: `uv add <package>`
+- Add dev dependency: `uv add --dev <package>`
+
+## Code Style
+- Follow Python conventions
+- Use type hints where appropriate
+- Keep functions focused and testable

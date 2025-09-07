@@ -16,16 +16,27 @@ class TestIntegration:
     
     def test_full_search_workflow(self, runner):
         """Test the complete search workflow"""
-        with patch('track_id.track_id.search_bandcamp') as mock_search:
+        with patch('track_id.track_id.unified_search') as mock_search:
             # Mock successful API response
             mock_search.return_value = {
-                "results": [
-                    {
-                        "title": "Midnight In Peckham",
-                        "artist": "Chaos In The CBD",
-                        "album": "Midnight In Peckham"
+                "bandcamp": {
+                    "success": True,
+                    "data": {
+                        "results": [
+                            {
+                                "title": "Midnight In Peckham",
+                                "artist": "Chaos In The CBD",
+                                "album": "Midnight In Peckham"
+                            }
+                        ]
                     }
-                ]
+                },
+                "musicbrainz": {
+                    "success": True,
+                    "data": {
+                        "recordings": []
+                    }
+                }
             }
             
             result = runner.invoke(app, ["search", "Chaos In The CBD"])
@@ -68,7 +79,7 @@ class TestIntegration:
     def test_error_handling_workflow(self, runner):
         """Test error handling in the complete workflow"""
         # Test with invalid search
-        with patch('track_id.track_id.search_bandcamp') as mock_search:
+        with patch('track_id.track_id.unified_search') as mock_search:
             mock_search.side_effect = Exception("Internal Server Error")
             
             result = runner.invoke(app, ["search", "invalid search"])

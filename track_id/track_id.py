@@ -5,14 +5,11 @@ from .display import (
     display_search_results, 
     display_file_info_table, 
     display_metadata_table,
-    display_error
+    display_error,
+    display_unified_search_results,
+    display_unified_enrichment_results
 )
-from .enrichment_handlers import (
-    handle_bandcamp_enrichment,
-    handle_musicbrainz_enrichment
-)
-from .bandcamp_api import search_bandcamp, enrich_mp3_file
-from .musicbrainz_api import search_musicbrainz, enrich_mp3_file_musicbrainz
+from .unified_api import search as unified_search, enrich as unified_enrich
 from .mp3_utils import MP3File
 
 def version_callback(value: bool):
@@ -48,22 +45,11 @@ def root_callback(
 
 @app.command()
 def search(search_text: str = typer.Argument(..., help="The text to search for")):
-    """Search for a track on Bandcamp"""
+    """Search for tracks across all available data sources (Bandcamp, MusicBrainz)"""
 
     try:
-        data = search_bandcamp(search_text)
-        display_search_results(data, "Bandcamp Search Results", "blue")
-    except Exception as e:
-        display_error(str(e))
-        raise typer.Exit(1)
-
-@app.command()
-def search_mb(search_text: str = typer.Argument(..., help="The text to search for")):
-    """Search for a track on MusicBrainz"""
-
-    try:
-        data = search_musicbrainz(search_text)
-        display_search_results(data, "MusicBrainz Search Results", "green")
+        results = unified_search(search_text)
+        display_unified_search_results(results)
     except Exception as e:
         display_error(str(e))
         raise typer.Exit(1)
@@ -85,14 +71,14 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")):
         raise typer.Exit(1)
 
 @app.command()
-def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with Bandcamp metadata")):
-    """Enrich an MP3 file with metadata from Bandcamp"""
-    handle_bandcamp_enrichment(file_path)
-
-@app.command()
-def enrich_mb(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with MusicBrainz metadata")):
-    """Enrich an MP3 file with metadata from MusicBrainz"""
-    handle_musicbrainz_enrichment(file_path)
+def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")):
+    """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz)"""
+    try:
+        result = unified_enrich(file_path)
+        display_unified_enrichment_results(result)
+    except Exception as e:
+        display_error(f"Error enriching MP3 file: {e}")
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
     app()

@@ -22,16 +22,16 @@ class TestMusicBrainzAPI:
         return CliRunner()
     
     def test_search_mb_command_exists(self, runner):
-        """Test that the search_mb command exists"""
-        result = runner.invoke(app, ["search-mb", "--help"])
-        assert result.exit_code == 0
-        assert "search-mb" in result.output.lower()
+        """Test that the search_mb command exists - REMOVED: command no longer exists"""
+        # The search-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass
     
     def test_enrich_mb_command_exists(self, runner):
-        """Test that the enrich_mb command exists"""
-        result = runner.invoke(app, ["enrich-mb", "--help"])
-        assert result.exit_code == 0
-        assert "enrich-mb" in result.output.lower()
+        """Test that the enrich_mb command exists - REMOVED: command no longer exists"""
+        # The enrich-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass
     
     @patch('track_id.musicbrainz_api.requests.get')
     def test_search_musicbrainz_success(self, mock_get):
@@ -158,12 +158,12 @@ class TestMusicBrainzAPI:
         assert "alternative" in metadata["TXXX:GENRE"]
     
     @patch('track_id.musicbrainz_api.MP3File')
-    @patch('track_id.musicbrainz_api.search_musicbrainz')
-    @patch('track_id.musicbrainz_api.find_matching_track')
-    @patch('track_id.musicbrainz_api.lookup_recording')
-    @patch('track_id.musicbrainz_api.extract_musicbrainz_metadata')
+    @patch('track_id.musicbrainz_api.MusicBrainzDataSource.search')
+    @patch('track_id.musicbrainz_api.MusicBrainzDataSource.find_matching_track')
+    @patch('track_id.musicbrainz_api.MusicBrainzDataSource.lookup_recording')
+    @patch('track_id.musicbrainz_api.MusicBrainzDataSource.extract_metadata')
     def test_enrich_mp3_file_musicbrainz_success(
-        self, mock_extract, mock_lookup, 
+        self, mock_extract, mock_lookup,
         mock_find, mock_search, mock_mp3_file_class
     ):
         """Test successful MP3 enrichment with MusicBrainz"""
@@ -181,7 +181,13 @@ class TestMusicBrainzAPI:
         mock_mp3_file_class.return_value = mock_mp3_file
         
         # Mock search results
-        mock_search.return_value = {"recordings": []}
+        mock_search.return_value = {"recordings": [
+            {
+                "id": "test-id-1",
+                "title": "Test Track",
+                "artist-credit": [{"name": "Test Artist"}]
+            }
+        ]}
         
         # Mock matching track
         mock_find.return_value = {"id": "test-id-1", "title": "Test Track"}
@@ -251,66 +257,26 @@ class TestMusicBrainzAPI:
         
         assert "No matching track found on MusicBrainz" in str(exc_info.value)
     
-    @patch('track_id.track_id.search_musicbrainz')
-    def test_search_mb_command_success(self, mock_search, runner):
-        """Test search_mb command with successful API response"""
-        # Mock successful API response
-        mock_search.return_value = {
-            "recordings": [
-                {
-                    "id": "test-id-1",
-                    "title": "Test Track",
-                    "artist-credit": [{"name": "Test Artist"}]
-                }
-            ]
-        }
-        
-        result = runner.invoke(app, ["search-mb", "test track"])
-        
-        assert result.exit_code == 0
-        mock_search.assert_called_once_with("test track")
+    def test_search_mb_command_success(self, runner):
+        """Test search_mb command with successful API response - REMOVED: command no longer exists"""
+        # The search-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass
     
-    @patch('track_id.track_id.search_musicbrainz')
-    def test_search_mb_command_error(self, mock_search, runner):
-        """Test search_mb command with API error"""
-        # Mock failed API response
-        mock_search.side_effect = Exception("API Error")
-        
-        result = runner.invoke(app, ["search-mb", "test track"])
-        
-        assert result.exit_code == 1
-        assert "Error:" in result.output
+    def test_search_mb_command_error(self, runner):
+        """Test search_mb command with API error - REMOVED: command no longer exists"""
+        # The search-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass
     
-    @patch('track_id.track_id.enrich_mp3_file_musicbrainz')
-    def test_enrich_mb_command_success(self, mock_enrich, runner):
-        """Test enrich_mb command with successful enrichment"""
-        # Mock successful enrichment
-        mock_enrich.return_value = {
-            'file_path': 'test.mp3',
-            'search_query': 'artist:"Test Artist" AND recording:"Test Track"',
-            'musicbrainz_recording': {
-                'id': 'test-id-1',
-                'title': 'Test Track',
-                'artist-credit': [{'name': 'Test Artist'}]
-            },
-            'existing_metadata': {'TPE1': 'Test Artist', 'TIT2': 'Test Track'},
-            'musicbrainz_metadata': {'TALB': 'Test Album'},
-            'added_metadata': {'TALB': 'Test Album'}
-        }
-        
-        result = runner.invoke(app, ["enrich-mb", "test.mp3"])
-        
-        assert result.exit_code == 0
-        assert "Successfully enriched" in result.output
-        mock_enrich.assert_called_once_with("test.mp3")
+    def test_enrich_mb_command_success(self, runner):
+        """Test enrich_mb command with successful enrichment - REMOVED: command no longer exists"""
+        # The enrich-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass
     
-    @patch('track_id.track_id.enrich_mp3_file_musicbrainz')
-    def test_enrich_mb_command_error(self, mock_enrich, runner):
-        """Test enrich_mb command with error"""
-        # Mock failed enrichment
-        mock_enrich.side_effect = Exception("Enrichment failed")
-        
-        result = runner.invoke(app, ["enrich-mb", "test.mp3"])
-        
-        assert result.exit_code == 1
-        assert "Error enriching MP3 file with MusicBrainz" in result.output 
+    def test_enrich_mb_command_error(self, runner):
+        """Test enrich_mb command with error - REMOVED: command no longer exists"""
+        # The enrich-mb command no longer exists in the unified architecture
+        # This test is kept for reference but will be removed
+        pass 

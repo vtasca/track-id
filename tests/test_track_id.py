@@ -32,14 +32,25 @@ class TestTrackIdCLI:
         assert result.exit_code == 0
         assert "enrich" in result.output.lower()
     
-    @patch('track_id.track_id.search_bandcamp')
+    @patch('track_id.track_id.unified_search')
     def test_search_command_success(self, mock_search, runner):
         """Test search command with successful API response"""
         # Mock successful API response
         mock_search.return_value = {
-            "results": [
-                {"title": "Test Track", "artist": "Test Artist"}
-            ]
+            "bandcamp": {
+                "success": True,
+                "data": {
+                    "results": [
+                        {"title": "Test Track", "artist": "Test Artist"}
+                    ]
+                }
+            },
+            "musicbrainz": {
+                "success": True,
+                "data": {
+                    "recordings": []
+                }
+            }
         }
         
         result = runner.invoke(app, ["search", "test track"])
@@ -47,7 +58,7 @@ class TestTrackIdCLI:
         assert result.exit_code == 0
         mock_search.assert_called_once_with("test track")
     
-    @patch('track_id.track_id.search_bandcamp')
+    @patch('track_id.track_id.unified_search')
     def test_search_command_error(self, mock_search, runner):
         """Test search command with API error"""
         # Mock failed API response
@@ -127,32 +138,76 @@ class TestTrackIdCLI:
         assert result.exit_code == 0
         assert "No metadata tags found" in result.output
     
-    @patch('track_id.track_id.enrich_mp3_file')
-    def test_enrich_command_success(self, mock_enrich, runner):
+    @patch('track_id.track_id.unified_enrich')
+    @patch('track_id.track_id.MP3File')
+    def test_enrich_command_success(self, mock_mp3_file_class, mock_enrich, runner):
         """Test enrich command with successful enrichment"""
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.info = {'file_path': 'test.mp3'}
+        mock_mp3_file.metadata = {'TPE1': 'Test Artist', 'TIT2': 'Test Title'}
+        mock_mp3_file_class.return_value = mock_mp3_file
+        
         # Mock successful enrichment result
         mock_enrich.return_value = {
             'file_path': 'test.mp3',
-            'search_query': 'Test Artist Test Title',
-            'bandcamp_track': {
-                'band_name': 'Test Artist',
-                'name': 'Test Title',
-                'album_name': 'Test Album',
-                'art_id': '1234567890'
+            'search_query': 'Test Artist - Test Title',
+            'successful_enrichment': {
+                'file_path': 'test.mp3',
+                'search_query': 'Test Artist - Test Title',
+                'bandcamp_track': {
+                    'band_name': 'Test Artist',
+                    'name': 'Test Title',
+                    'album_name': 'Test Album',
+                    'art_id': '1234567890'
+                },
+                'existing_metadata': {
+                    'TIT2': 'Test Title',
+                    'TPE1': 'Test Artist'
+                },
+                'bandcamp_metadata': {
+                    'TIT2': 'Test Title',
+                    'TPE1': 'Test Artist',
+                    'TALB': 'Test Album',
+                    'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+                },
+                'added_metadata': {
+                    'TALB': 'Test Album',
+                    'artwork': 'Added album artwork (image/jpeg)'
+                }
             },
-            'existing_metadata': {
-                'TIT2': 'Test Title',
-                'TPE1': 'Test Artist'
-            },
-            'bandcamp_metadata': {
-                'TIT2': 'Test Title',
-                'TPE1': 'Test Artist',
-                'TALB': 'Test Album',
-                'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
-            },
-            'added_metadata': {
-                'TALB': 'Test Album',
-                'artwork': 'Added album artwork (image/jpeg)'
+            'all_results': {
+                'bandcamp': {
+                    'success': True,
+                    'data': {
+                        'file_path': 'test.mp3',
+                        'search_query': 'Test Artist - Test Title',
+                        'bandcamp_track': {
+                            'band_name': 'Test Artist',
+                            'name': 'Test Title',
+                            'album_name': 'Test Album',
+                            'art_id': '1234567890'
+                        },
+                        'existing_metadata': {
+                            'TIT2': 'Test Title',
+                            'TPE1': 'Test Artist'
+                        },
+                        'bandcamp_metadata': {
+                            'TIT2': 'Test Title',
+                            'TPE1': 'Test Artist',
+                            'TALB': 'Test Album',
+                            'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+                        },
+                        'added_metadata': {
+                            'TALB': 'Test Album',
+                            'artwork': 'Added album artwork (image/jpeg)'
+                        }
+                    }
+                },
+                'musicbrainz': {
+                    'success': False,
+                    'error': 'No matching track found'
+                }
             }
         }
         
@@ -165,9 +220,16 @@ class TestTrackIdCLI:
         assert "Test Album" in result.output
         assert "Added album artwork" in result.output
     
-    @patch('track_id.track_id.enrich_mp3_file')
-    def test_enrich_command_error(self, mock_enrich, runner):
+    @patch('track_id.track_id.unified_enrich')
+    @patch('track_id.track_id.MP3File')
+    def test_enrich_command_error(self, mock_mp3_file_class, mock_enrich, runner):
         """Test enrich command with error"""
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.info = {'file_path': 'test.mp3'}
+        mock_mp3_file.metadata = {'TPE1': 'Test Artist', 'TIT2': 'Test Title'}
+        mock_mp3_file_class.return_value = mock_mp3_file
+        
         # Mock error
         mock_enrich.side_effect = ValueError("Cannot enrich file: missing artist (TPE1) or title (TIT2) metadata")
         
@@ -177,32 +239,76 @@ class TestTrackIdCLI:
         assert "Error enriching MP3 file" in result.output
         assert "missing artist" in result.output
         
-    @patch('track_id.track_id.enrich_mp3_file')
-    def test_enrich_command_with_artwork(self, mock_enrich, runner):
+    @patch('track_id.track_id.unified_enrich')
+    @patch('track_id.track_id.MP3File')
+    def test_enrich_command_with_artwork(self, mock_mp3_file_class, mock_enrich, runner):
         """Test enrich command with artwork functionality"""
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.info = {'file_path': 'test.mp3'}
+        mock_mp3_file.metadata = {'TPE1': 'Test Artist', 'TIT2': 'Test Title'}
+        mock_mp3_file_class.return_value = mock_mp3_file
+        
         # Mock successful enrichment result with artwork
         mock_enrich.return_value = {
             'file_path': 'test.mp3',
-            'search_query': 'Test Artist Test Title',
-            'bandcamp_track': {
-                'band_name': 'Test Artist',
-                'name': 'Test Title',
-                'album_name': 'Test Album',
-                'art_id': '1234567890'
+            'search_query': 'Test Artist - Test Title',
+            'successful_enrichment': {
+                'file_path': 'test.mp3',
+                'search_query': 'Test Artist - Test Title',
+                'bandcamp_track': {
+                    'band_name': 'Test Artist',
+                    'name': 'Test Title',
+                    'album_name': 'Test Album',
+                    'art_id': '1234567890'
+                },
+                'existing_metadata': {
+                    'TIT2': 'Test Title',
+                    'TPE1': 'Test Artist',
+                    'TALB': 'Test Album'  # Already has album
+                },
+                'bandcamp_metadata': {
+                    'TIT2': 'Test Title',
+                    'TPE1': 'Test Artist',
+                    'TALB': 'Test Album',
+                    'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+                },
+                'added_metadata': {
+                    'artwork': 'Added album artwork (image/jpeg)'
+                }
             },
-            'existing_metadata': {
-                'TIT2': 'Test Title',
-                'TPE1': 'Test Artist',
-                'TALB': 'Test Album'  # Already has album
-            },
-            'bandcamp_metadata': {
-                'TIT2': 'Test Title',
-                'TPE1': 'Test Artist',
-                'TALB': 'Test Album',
-                'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
-            },
-            'added_metadata': {
-                'artwork': 'Added album artwork (image/jpeg)'
+            'all_results': {
+                'bandcamp': {
+                    'success': True,
+                    'data': {
+                        'file_path': 'test.mp3',
+                        'search_query': 'Test Artist - Test Title',
+                        'bandcamp_track': {
+                            'band_name': 'Test Artist',
+                            'name': 'Test Title',
+                            'album_name': 'Test Album',
+                            'art_id': '1234567890'
+                        },
+                        'existing_metadata': {
+                            'TIT2': 'Test Title',
+                            'TPE1': 'Test Artist',
+                            'TALB': 'Test Album'  # Already has album
+                        },
+                        'bandcamp_metadata': {
+                            'TIT2': 'Test Title',
+                            'TPE1': 'Test Artist',
+                            'TALB': 'Test Album',
+                            'artwork_url': 'https://f4.bcbits.com/img/a1234567890_16.jpg'
+                        },
+                        'added_metadata': {
+                            'artwork': 'Added album artwork (image/jpeg)'
+                        }
+                    }
+                },
+                'musicbrainz': {
+                    'success': False,
+                    'error': 'No matching track found'
+                }
             }
         }
         

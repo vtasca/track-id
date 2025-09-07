@@ -138,3 +138,71 @@ def display_enrichment_results(result, search_details_func):
 def display_error(message, prefix="Error"):
     """Display error message in red."""
     console.print(f"[bold red]{prefix}: {message}[/bold red]")
+
+
+def display_unified_search_results(results):
+    """Display search results from all data sources."""
+    console.print(Panel(
+        f"[bold cyan]Search completed across {len(results)} data sources[/bold cyan]",
+        title="[bold blue]Unified Search Results[/bold blue]",
+        border_style="blue"
+    ))
+    
+    for source_name, result in results.items():
+        if result['success']:
+            console.print(Panel(
+                JSON.from_data(result['data']),
+                title=f"[bold green]{source_name} Results[/bold green]",
+                border_style="green"
+            ))
+        else:
+            console.print(Panel(
+                f"[red]Error: {result['error']}[/red]",
+                title=f"[bold red]{source_name} Error[/bold red]",
+                border_style="red"
+            ))
+
+
+def display_unified_enrichment_results(result):
+    """Display enrichment results from unified enrichment."""
+    # Show successful enrichment
+    successful = result['successful_enrichment']
+    source_name = "Unknown"
+    
+    # Determine which source succeeded
+    for source_name, source_result in result['all_results'].items():
+        if source_result['success']:
+            source_name = source_name
+            break
+    
+    # Display success message
+    display_enrichment_success(successful['file_path'], source_name)
+    
+    # Display search details based on the successful source
+    if 'bandcamp_track' in successful:
+        display_bandcamp_search_details(successful)
+    elif 'musicbrainz_recording' in successful:
+        display_musicbrainz_search_details(successful)
+    
+    # Show added metadata
+    actual_added_metadata = filter_actual_metadata(successful['added_metadata'])
+    
+    if actual_added_metadata:
+        display_metadata_table(actual_added_metadata, "New Metadata Added", "green")
+    else:
+        console.print(Panel(
+            "No new metadata was added - all fields already had values",
+            title="[yellow]No Changes[/yellow]",
+            border_style="yellow"
+        ))
+    
+    # Show existing metadata for comparison
+    if successful['existing_metadata']:
+        display_metadata_table(successful['existing_metadata'], "Existing Metadata", "yellow")
+    
+    # Show summary of all data source attempts
+    console.print("\n[bold cyan]Data Source Summary:[/bold cyan]")
+    for source_name, source_result in result['all_results'].items():
+        status = "✓ Success" if source_result['success'] else f"✗ Failed: {source_result['error']}"
+        color = "green" if source_result['success'] else "red"
+        console.print(f"  [{color}]{source_name}: {status}[/{color}]")
