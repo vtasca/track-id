@@ -1,13 +1,19 @@
 """Common enrichment handlers to eliminate code duplication."""
 
 import typer
+from typing import Callable, Any, Dict
 from .display import display_enrichment_success, display_enrichment_results, display_error
 from .display import display_bandcamp_search_details, display_musicbrainz_search_details
 from .bandcamp_api import BandcampDataSource
 from .musicbrainz_api import MusicBrainzDataSource
 
 
-def handle_enrichment_command(file_path: str, enrich_func, search_details_func, service_name: str = ""):
+def handle_enrichment_command(
+    file_path: str, 
+    enrich_func: Callable[[str], Dict[str, Any]], 
+    search_details_func: Callable[[Dict[str, Any]], None], 
+    service_name: str = ""
+) -> None:
     """
     Common handler for enrichment commands.
     
@@ -35,7 +41,7 @@ def handle_enrichment_command(file_path: str, enrich_func, search_details_func, 
         raise typer.Exit(1)
 
 
-def handle_bandcamp_enrichment(file_path: str):
+def handle_bandcamp_enrichment(file_path: str) -> None:
     """Handle Bandcamp enrichment command."""
     bandcamp_source = BandcampDataSource()
     handle_enrichment_command(
@@ -46,7 +52,7 @@ def handle_bandcamp_enrichment(file_path: str):
     )
 
 
-def handle_musicbrainz_enrichment(file_path: str):
+def handle_musicbrainz_enrichment(file_path: str) -> None:
     """Handle MusicBrainz enrichment command."""
     musicbrainz_source = MusicBrainzDataSource()
     handle_enrichment_command(

@@ -1,5 +1,6 @@
 """Display utilities for Rich console output formatting."""
 
+from typing import Dict, Any, List, Optional
 from rich.console import Console
 from rich.json import JSON
 from rich.table import Table
@@ -10,7 +11,7 @@ from .data_sources import extract_artist_name_from_credits
 console = Console()
 
 
-def extract_artist_name_from_track_data(track_data: dict, source_type: str) -> str:
+def extract_artist_name_from_track_data(track_data: Dict[str, Any], source_type: str) -> str:
     """Extract artist name from track data based on source type."""
     if source_type == "bandcamp":
         return track_data.get('band_name', 'Unknown')
@@ -20,7 +21,7 @@ def extract_artist_name_from_track_data(track_data: dict, source_type: str) -> s
         return track_data.get('artist', 'Unknown')
 
 
-def display_search_results(data, title, color):
+def display_search_results(data: Any, title: str, color: str) -> None:
     """Display search results in a formatted panel."""
     console.print(Panel.fit(
         JSON.from_data(data),
@@ -29,7 +30,7 @@ def display_search_results(data, title, color):
     ))
 
 
-def display_file_info_table(file_info):
+def display_file_info_table(file_info: Dict[str, Any]) -> None:
     """Create and display MP3 file information table."""
     # Format duration
     duration_seconds = file_info['duration_seconds']
@@ -51,7 +52,7 @@ def display_file_info_table(file_info):
     console.print(info_table)
 
 
-def display_metadata_table(tags, title="Metadata Tags", color="yellow"):
+def display_metadata_table(tags: Dict[str, str], title: str = "Metadata Tags", color: str = "yellow") -> None:
     """Create and display metadata table."""
     if not tags:
         console.print(Panel("No metadata tags found", title=f"[{color}]Metadata[/{color}]", border_style=color))
@@ -69,7 +70,7 @@ def display_metadata_table(tags, title="Metadata Tags", color="yellow"):
     console.print(metadata_table)
 
 
-def display_enrichment_success(file_path, service_name=""):
+def display_enrichment_success(file_path: str, service_name: str = "") -> None:
     """Display enrichment success panel."""
     title = f"{service_name} Enrichment Complete" if service_name else "Enrichment Complete"
     console.print(Panel(
@@ -79,7 +80,7 @@ def display_enrichment_success(file_path, service_name=""):
     ))
 
 
-def display_bandcamp_search_details(result):
+def display_bandcamp_search_details(result: Dict[str, Any]) -> None:
     """Display Bandcamp-specific search details."""
     track = result['bandcamp_track']
     search_panel = Panel(
@@ -92,7 +93,7 @@ def display_bandcamp_search_details(result):
     console.print(search_panel)
 
 
-def display_musicbrainz_search_details(result):
+def display_musicbrainz_search_details(result: Dict[str, Any]) -> None:
     """Display MusicBrainz-specific search details."""
     recording = result['musicbrainz_recording']
     artist_name = extract_artist_name_from_track_data(recording, "musicbrainz")
@@ -107,14 +108,14 @@ def display_musicbrainz_search_details(result):
     console.print(search_panel)
 
 
-def filter_actual_metadata(metadata):
+def filter_actual_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Filter out skipped metadata entries to show only actual additions."""
     return {k: v for k, v in metadata.items() 
             if not str(v).startswith('Artwork already exists') and 
                not str(v).startswith('No new metadata')}
 
 
-def display_enrichment_results(result, search_details_func):
+def display_enrichment_results(result: Dict[str, Any], search_details_func: Any) -> None:
     """Display complete enrichment results using provided search details function."""
     # Show search details
     search_details_func(result)
@@ -136,12 +137,12 @@ def display_enrichment_results(result, search_details_func):
         display_metadata_table(result['existing_metadata'], "Existing Metadata", "yellow")
 
 
-def display_error(message, prefix="Error"):
+def display_error(message: str, prefix: str = "Error") -> None:
     """Display error message in red."""
     console.print(f"[bold red]{prefix}: {message}[/bold red]")
 
 
-def display_unified_search_results(results, top_n: int = 3):
+def display_unified_search_results(results: Dict[str, Any], top_n: int = 3) -> None:
     """Display search results from all data sources in a clean summary format."""
     console.print(Panel(
         f"[bold cyan]Search completed across {len(results)} data sources[/bold cyan]",
@@ -160,7 +161,7 @@ def display_unified_search_results(results, top_n: int = 3):
             ))
 
 
-def display_search_summary(source_name: str, data: dict, top_n: int = 3):
+def display_search_summary(source_name: str, data: Dict[str, Any], top_n: int = 3) -> None:
     """Display a clean summary of search results for a specific data source."""
     if source_name == "Bandcamp":
         display_bandcamp_search_summary(data, top_n)
@@ -175,7 +176,7 @@ def display_search_summary(source_name: str, data: dict, top_n: int = 3):
         ))
 
 
-def display_bandcamp_search_summary(data: dict, top_n: int = 3):
+def display_bandcamp_search_summary(data: Dict[str, Any], top_n: int = 3) -> None:
     """Display a clean summary of Bandcamp search results."""
     if 'auto' not in data or 'results' not in data['auto']:
         console.print(Panel(
@@ -226,7 +227,7 @@ def display_bandcamp_search_summary(data: dict, top_n: int = 3):
         console.print(f"[dim]Showing top {top_n} of {total_tracks} track results[/dim]")
 
 
-def display_musicbrainz_search_summary(data: dict, top_n: int = 3):
+def display_musicbrainz_search_summary(data: Dict[str, Any], top_n: int = 3) -> None:
     """Display a clean summary of MusicBrainz search results."""
     if 'recordings' not in data:
         console.print(Panel(
@@ -281,7 +282,7 @@ def display_musicbrainz_search_summary(data: dict, top_n: int = 3):
         console.print(f"[dim]Showing top {top_n} of {total_recordings} recording results[/dim]")
 
 
-def display_unified_enrichment_results(result):
+def display_unified_enrichment_results(result: Dict[str, Any]) -> None:
     """Display enrichment results from unified enrichment."""
     # Show successful enrichment
     successful = result['successful_enrichment']

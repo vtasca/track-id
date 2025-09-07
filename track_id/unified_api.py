@@ -6,7 +6,7 @@ from .bandcamp_api import BandcampDataSource
 from .musicbrainz_api import MusicBrainzDataSource
 
 
-def initialize_data_sources():
+def initialize_data_sources() -> None:
     """Initialize and register all available data sources."""
     # Register Bandcamp data source
     bandcamp_source = BandcampDataSource()

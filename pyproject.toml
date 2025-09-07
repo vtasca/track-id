@@ -26,6 +26,8 @@ packages = ["track_id"]
 dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "mypy>=1.17.1",
+    "types-requests>=2.31.0.6",
 ]
 
 [tool.pytest.ini_options]

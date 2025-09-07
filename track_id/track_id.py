@@ -1,5 +1,6 @@
 import typer
 import importlib.metadata
+from typing import NoReturn
 from .display import (
     console, 
     display_search_results, 
@@ -12,7 +13,7 @@ from .display import (
 from .unified_api import search as unified_search, enrich as unified_enrich
 from .mp3_utils import MP3File
 
-def version_callback(value: bool):
+def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
         try:
@@ -39,7 +40,7 @@ def root_callback(
         callback=version_callback,
         is_eager=True
     )
-):
+) -> None:
     """Track ID - MP3 metadata enrichment tool"""
     pass
 
@@ -47,7 +48,7 @@ def root_callback(
 def search(
     search_text: str = typer.Argument(..., help="The text to search for"),
     top: int = typer.Option(3, "--top", "-t", help="Number of top results to show per source (default: 5)")
-):
+) -> None:
     """Search for tracks across all available data sources (Bandcamp, MusicBrainz)"""
 
     try:
@@ -58,7 +59,7 @@ def search(
         raise typer.Exit(1)
 
 @app.command()
-def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")):
+def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> None:
     """Display information about an MP3 file"""
     
     try:
@@ -74,7 +75,7 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")):
         raise typer.Exit(1)
 
 @app.command()
-def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")):
+def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")) -> None:
     """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz)"""
     try:
         result = unified_enrich(file_path)

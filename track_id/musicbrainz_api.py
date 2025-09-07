@@ -1,6 +1,6 @@
 import requests
 import time
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from .mp3_utils import MP3File
 from .data_sources import DataSource, extract_artist_name_from_credits
 
@@ -23,7 +23,7 @@ class MusicBrainzDataSource(DataSource):
             "Accept": "application/json"
         }
 
-        params = {
+        params: Dict[str, Union[str, int]] = {
             'query': search_text,
             'fmt': 'json',
             'limit': 25
@@ -54,7 +54,7 @@ class MusicBrainzDataSource(DataSource):
             "Accept": "application/json"
         }
 
-        params = {
+        params: Dict[str, str] = {
             'fmt': 'json',
             'inc': '+'.join(includes)
         }
