@@ -2,9 +2,9 @@
 
 import typer
 from .display import display_enrichment_success, display_enrichment_results, display_error
-# Import from track_id module to allow proper mocking in tests
-from . import track_id
 from .display import display_bandcamp_search_details, display_musicbrainz_search_details
+from .bandcamp_api import BandcampDataSource
+from .musicbrainz_api import MusicBrainzDataSource
 
 
 def handle_enrichment_command(file_path: str, enrich_func, search_details_func, service_name: str = ""):
@@ -37,9 +37,10 @@ def handle_enrichment_command(file_path: str, enrich_func, search_details_func, 
 
 def handle_bandcamp_enrichment(file_path: str):
     """Handle Bandcamp enrichment command."""
+    bandcamp_source = BandcampDataSource()
     handle_enrichment_command(
         file_path=file_path,
-        enrich_func=track_id.enrich_mp3_file,
+        enrich_func=bandcamp_source.enrich_mp3_file,
         search_details_func=display_bandcamp_search_details,
         service_name=""  # Original doesn't have service name in title
     )
@@ -47,9 +48,10 @@ def handle_bandcamp_enrichment(file_path: str):
 
 def handle_musicbrainz_enrichment(file_path: str):
     """Handle MusicBrainz enrichment command."""
+    musicbrainz_source = MusicBrainzDataSource()
     handle_enrichment_command(
         file_path=file_path,
-        enrich_func=track_id.enrich_mp3_file_musicbrainz,
+        enrich_func=musicbrainz_source.enrich_mp3_file,
         search_details_func=display_musicbrainz_search_details,
         service_name="MusicBrainz"
     )

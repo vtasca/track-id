@@ -46,7 +46,7 @@ def root_callback(
 @app.command()
 def search(
     search_text: str = typer.Argument(..., help="The text to search for"),
-    top: int = typer.Option(5, "--top", "-t", help="Number of top results to show per source (default: 5)")
+    top: int = typer.Option(3, "--top", "-t", help="Number of top results to show per source (default: 5)")
 ):
     """Search for tracks across all available data sources (Bandcamp, MusicBrainz)"""
 

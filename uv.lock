@@ -382,7 +382,7 @@ wheels = [
 
 [[package]]
 name = "track-id"
-version = "0.1.3"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "mutagen" },

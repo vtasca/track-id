@@ -5,9 +5,7 @@ from track_id.mp3_utils import (
     get_mime_type, 
     update_mp3_metadata
 )
-from track_id.bandcamp_api import (
-    extract_bandcamp_metadata
-)
+from track_id.bandcamp_api import BandcampDataSource
 
 
 class TestArtworkFunctionality:
@@ -71,7 +69,8 @@ class TestArtworkFunctionality:
             'art_id': '1234567890'
         }
         
-        result = extract_bandcamp_metadata(track_data)
+        source = BandcampDataSource()
+        result = source.extract_metadata(track_data)
         
         assert result['TIT2'] == 'Test Track'
         assert result['TPE1'] == 'Test Artist'
@@ -86,7 +85,8 @@ class TestArtworkFunctionality:
             'album_name': 'Test Album'
         }
         
-        result = extract_bandcamp_metadata(track_data)
+        source = BandcampDataSource()
+        result = source.extract_metadata(track_data)
         
         assert result['TIT2'] == 'Test Track'
         assert result['TPE1'] == 'Test Artist'

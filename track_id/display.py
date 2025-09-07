@@ -5,8 +5,19 @@ from rich.json import JSON
 from rich.table import Table
 from rich.panel import Panel
 from .id3_tags import ID3_TAG_NAMES
+from .data_sources import extract_artist_name_from_credits
 
 console = Console()
+
+
+def extract_artist_name_from_track_data(track_data: dict, source_type: str) -> str:
+    """Extract artist name from track data based on source type."""
+    if source_type == "bandcamp":
+        return track_data.get('band_name', 'Unknown')
+    elif source_type == "musicbrainz":
+        return extract_artist_name_from_credits(track_data.get('artist-credit', []))
+    else:
+        return track_data.get('artist', 'Unknown')
 
 
 def display_search_results(data, title, color):
@@ -84,17 +95,7 @@ def display_bandcamp_search_details(result):
 def display_musicbrainz_search_details(result):
     """Display MusicBrainz-specific search details."""
     recording = result['musicbrainz_recording']
-    
-    # Extract artist names
-    artist_name = ""
-    if 'artist-credit' in recording and recording['artist-credit']:
-        artist_names = []
-        for artist_credit in recording['artist-credit']:
-            if isinstance(artist_credit, dict) and 'name' in artist_credit:
-                artist_names.append(artist_credit['name'])
-            elif isinstance(artist_credit, str):
-                artist_names.append(artist_credit)
-        artist_name = ' '.join(artist_names)
+    artist_name = extract_artist_name_from_track_data(recording, "musicbrainz")
     
     search_panel = Panel(
         f"[cyan]Search Query:[/cyan] {result['search_query']}\n"
@@ -159,7 +160,7 @@ def display_unified_search_results(results, top_n: int = 3):
             ))
 
 
-def display_search_summary(source_name: str, data: dict, top_n: int = 5):
+def display_search_summary(source_name: str, data: dict, top_n: int = 3):
     """Display a clean summary of search results for a specific data source."""
     if source_name == "Bandcamp":
         display_bandcamp_search_summary(data, top_n)
@@ -174,7 +175,7 @@ def display_search_summary(source_name: str, data: dict, top_n: int = 5):
         ))
 
 
-def display_bandcamp_search_summary(data: dict, top_n: int = 5):
+def display_bandcamp_search_summary(data: dict, top_n: int = 3):
     """Display a clean summary of Bandcamp search results."""
     if 'auto' not in data or 'results' not in data['auto']:
         console.print(Panel(
@@ -225,7 +226,7 @@ def display_bandcamp_search_summary(data: dict, top_n: int = 5):
         console.print(f"[dim]Showing top {top_n} of {total_tracks} track results[/dim]")
 
 
-def display_musicbrainz_search_summary(data: dict, top_n: int = 5):
+def display_musicbrainz_search_summary(data: dict, top_n: int = 3):
     """Display a clean summary of MusicBrainz search results."""
     if 'recordings' not in data:
         console.print(Panel(
@@ -255,15 +256,7 @@ def display_musicbrainz_search_summary(data: dict, top_n: int = 5):
     
     for i, recording in enumerate(recordings, 1):
         # Extract artist name
-        artist_name = ""
-        if 'artist-credit' in recording and recording['artist-credit']:
-            artist_names = []
-            for artist_credit in recording['artist-credit']:
-                if isinstance(artist_credit, dict) and 'name' in artist_credit:
-                    artist_names.append(artist_credit['name'])
-                elif isinstance(artist_credit, str):
-                    artist_names.append(artist_credit)
-            artist_name = ' '.join(artist_names)
+        artist_name = extract_artist_name_from_track_data(recording, "musicbrainz")
         
         title = recording.get('title', 'Unknown')
         release = ""

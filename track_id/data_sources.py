@@ -5,6 +5,21 @@ from typing import Dict, List, Optional, Any, Tuple
 from .mp3_utils import MP3File
 
 
+def extract_artist_name_from_credits(artist_credits: List[Any]) -> str:
+    """Extract artist name from various artist credit formats."""
+    if not artist_credits:
+        return ""
+    
+    artist_names = []
+    for artist_credit in artist_credits:
+        if isinstance(artist_credit, dict) and 'name' in artist_credit:
+            artist_names.append(artist_credit['name'])
+        elif isinstance(artist_credit, str):
+            artist_names.append(artist_credit)
+    
+    return ' '.join(artist_names)
+
+
 class DataSource(ABC):
     """Abstract base class for all data sources."""
     
@@ -26,10 +41,62 @@ class DataSource(ABC):
         """Extract metadata from track data."""
         pass
     
-    @abstractmethod
     def enrich_mp3_file(self, file_path: str) -> Dict[str, Any]:
-        """Enrich an MP3 file with metadata from this data source."""
-        pass
+        """
+        Enrich an MP3 file with metadata from this data source.
+        This is the common implementation that all data sources can use.
+        """
+        # Create MP3File instance
+        mp3_file = MP3File(file_path)
+        
+        # Extract artist and title from existing metadata for search
+        artist = mp3_file.metadata.get('TPE1', '')
+        title = mp3_file.metadata.get('TIT2', '')
+        
+        # If metadata is missing, try to parse from filename
+        if not artist or not title:
+            filename_artist, filename_title = mp3_file.parsed_filename
+            if filename_artist and filename_title:
+                artist = filename_artist
+                title = filename_title
+            else:
+                raise ValueError("Cannot enrich file: missing artist and title metadata in both ID3 tags and filename")
+        
+        # Search using the data source's search method
+        search_text = self._build_search_query(artist, title)
+        search_results = self.search(search_text)
+        
+        # Find matching track
+        matching_track = self.find_matching_track(search_results, artist, title)
+        
+        if not matching_track:
+            raise ValueError(f"No matching track found on {self.name} for '{artist} - {title}'")
+        
+        # Get detailed track information (if needed)
+        detailed_track = self._get_detailed_track_info(matching_track)
+        
+        # Extract metadata from the data source
+        source_metadata = self.extract_metadata(detailed_track)
+        
+        # Update MP3 file with new metadata
+        added_metadata = mp3_file.update_metadata(source_metadata)
+        
+        return {
+            'file_path': file_path,
+            'search_query': search_text,
+            f'{self.name.lower()}_track': detailed_track,
+            'existing_metadata': mp3_file.metadata,
+            f'{self.name.lower()}_metadata': source_metadata,
+            'added_metadata': added_metadata
+        }
+    
+    def _build_search_query(self, artist: str, title: str) -> str:
+        """Build search query from artist and title. Override in subclasses if needed."""
+        return f"{artist} - {title}"
+    
+    def _get_detailed_track_info(self, track_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get detailed track information. Override in subclasses if needed."""
+        return track_data
     
     def get_display_name(self) -> str:
         """Get the display name for this data source."""

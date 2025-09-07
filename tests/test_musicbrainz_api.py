@@ -4,13 +4,7 @@ import tempfile
 from unittest.mock import Mock, patch, mock_open
 from typer.testing import CliRunner
 from track_id import app
-from track_id.musicbrainz_api import (
-    search_musicbrainz,
-    lookup_recording,
-    find_matching_track,
-    extract_musicbrainz_metadata,
-    enrich_mp3_file_musicbrainz
-)
+from track_id.musicbrainz_api import MusicBrainzDataSource
 
 
 class TestMusicBrainzAPI:
@@ -21,17 +15,6 @@ class TestMusicBrainzAPI:
         """Create a CLI runner for testing"""
         return CliRunner()
     
-    def test_search_mb_command_exists(self, runner):
-        """Test that the search_mb command exists - REMOVED: command no longer exists"""
-        # The search-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass
-    
-    def test_enrich_mb_command_exists(self, runner):
-        """Test that the enrich_mb command exists - REMOVED: command no longer exists"""
-        # The enrich-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass
     
     @patch('track_id.musicbrainz_api.requests.get')
     def test_search_musicbrainz_success(self, mock_get):
@@ -50,7 +33,8 @@ class TestMusicBrainzAPI:
         }
         mock_get.return_value = mock_response
         
-        result = search_musicbrainz("test track")
+        source = MusicBrainzDataSource()
+        result = source.search("test track")
         
         assert result["recordings"][0]["title"] == "Test Track"
         assert result["recordings"][0]["artist-credit"][0]["name"] == "Test Artist"
@@ -65,8 +49,9 @@ class TestMusicBrainzAPI:
         mock_response.text = "Not Found"
         mock_get.return_value = mock_response
         
+        source = MusicBrainzDataSource()
         with pytest.raises(Exception) as exc_info:
-            search_musicbrainz("test track")
+            source.search("test track")
         
         assert "MusicBrainz API error: 404" in str(exc_info.value)
     
@@ -85,7 +70,8 @@ class TestMusicBrainzAPI:
         }
         mock_get.return_value = mock_response
         
-        result = lookup_recording("test-id-1")
+        source = MusicBrainzDataSource()
+        result = source.lookup_recording("test-id-1")
         
         assert result["title"] == "Test Track"
         assert result["releases"][0]["title"] == "Test Album"
@@ -108,7 +94,8 @@ class TestMusicBrainzAPI:
             ]
         }
         
-        result = find_matching_track(search_results, "Test Artist", "Test Track")
+        source = MusicBrainzDataSource()
+        result = source.find_matching_track(search_results, "Test Artist", "Test Track")
         
         assert result is not None
         assert result["id"] == "test-id-1"
@@ -126,7 +113,8 @@ class TestMusicBrainzAPI:
             ]
         }
         
-        result = find_matching_track(search_results, "Test Artist", "Test Track")
+        source = MusicBrainzDataSource()
+        result = source.find_matching_track(search_results, "Test Artist", "Test Track")
         
         assert result is None
     
@@ -147,7 +135,8 @@ class TestMusicBrainzAPI:
             ]
         }
         
-        metadata = extract_musicbrainz_metadata(recording_data)
+        source = MusicBrainzDataSource()
+        metadata = source.extract_metadata(recording_data)
         
         assert metadata["TIT2"] == "Test Track"
         assert metadata["TPE1"] == "Test Artist"
@@ -157,7 +146,7 @@ class TestMusicBrainzAPI:
         assert "rock" in metadata["TXXX:GENRE"]
         assert "alternative" in metadata["TXXX:GENRE"]
     
-    @patch('track_id.musicbrainz_api.MP3File')
+    @patch('track_id.data_sources.MP3File')
     @patch('track_id.musicbrainz_api.MusicBrainzDataSource.search')
     @patch('track_id.musicbrainz_api.MusicBrainzDataSource.find_matching_track')
     @patch('track_id.musicbrainz_api.MusicBrainzDataSource.lookup_recording')
@@ -206,7 +195,8 @@ class TestMusicBrainzAPI:
             "TALB": "Test Album"
         }
         
-        result = enrich_mp3_file_musicbrainz("test.mp3")
+        source = MusicBrainzDataSource()
+        result = source.enrich_mp3_file("test.mp3")
         
         assert result["file_path"] == "test.mp3"
         assert result["musicbrainz_metadata"]["TALB"] == "Test Album"
@@ -216,7 +206,7 @@ class TestMusicBrainzAPI:
         mock_extract.assert_called_once()
         mock_mp3_file.update_metadata.assert_called_once()
     
-    @patch('track_id.musicbrainz_api.MP3File')
+    @patch('track_id.data_sources.MP3File')
     def test_enrich_mp3_file_musicbrainz_no_metadata(self, mock_mp3_file_class):
         """Test enrichment with no existing metadata"""
         # Mock MP3File instance with no metadata
@@ -225,17 +215,14 @@ class TestMusicBrainzAPI:
         mock_mp3_file.parsed_filename = ("", "")  # No filename parsing
         mock_mp3_file_class.return_value = mock_mp3_file
         
+        source = MusicBrainzDataSource()
         with pytest.raises(ValueError) as exc_info:
-            enrich_mp3_file_musicbrainz("test.mp3")
+            source.enrich_mp3_file("test.mp3")
         
         assert "missing artist and title metadata" in str(exc_info.value)
     
-    @patch('track_id.musicbrainz_api.MP3File')
-    @patch('track_id.musicbrainz_api.search_musicbrainz')
-    @patch('track_id.musicbrainz_api.find_matching_track')
-    def test_enrich_mp3_file_musicbrainz_no_match(
-        self, mock_find, mock_search, mock_mp3_file_class
-    ):
+    @patch('track_id.data_sources.MP3File')
+    def test_enrich_mp3_file_musicbrainz_no_match(self, mock_mp3_file_class):
         """Test enrichment with no matching track found"""
         # Mock MP3File instance
         mock_mp3_file = Mock()
@@ -246,37 +233,12 @@ class TestMusicBrainzAPI:
         mock_mp3_file.parsed_filename = ("", "")  # No filename parsing needed
         mock_mp3_file_class.return_value = mock_mp3_file
         
-        # Mock search results
-        mock_search.return_value = {"recordings": []}
+        source = MusicBrainzDataSource()
         
-        # Mock no matching track
-        mock_find.return_value = None
-        
-        with pytest.raises(ValueError) as exc_info:
-            enrich_mp3_file_musicbrainz("test.mp3")
-        
-        assert "No matching track found on MusicBrainz" in str(exc_info.value)
-    
-    def test_search_mb_command_success(self, runner):
-        """Test search_mb command with successful API response - REMOVED: command no longer exists"""
-        # The search-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass
-    
-    def test_search_mb_command_error(self, runner):
-        """Test search_mb command with API error - REMOVED: command no longer exists"""
-        # The search-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass
-    
-    def test_enrich_mb_command_success(self, runner):
-        """Test enrich_mb command with successful enrichment - REMOVED: command no longer exists"""
-        # The enrich-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass
-    
-    def test_enrich_mb_command_error(self, runner):
-        """Test enrich_mb command with error - REMOVED: command no longer exists"""
-        # The enrich-mb command no longer exists in the unified architecture
-        # This test is kept for reference but will be removed
-        pass 
+        # Mock the search method to return empty results
+        with patch.object(source, 'search', return_value={"recordings": []}):
+            with patch.object(source, 'find_matching_track', return_value=None):
+                with pytest.raises(ValueError) as exc_info:
+                    source.enrich_mp3_file("test.mp3")
+                
+                assert "No matching track found on MusicBrainz" in str(exc_info.value) 

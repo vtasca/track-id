@@ -2,11 +2,11 @@ import requests
 import time
 from typing import Dict, List, Optional, Any, Tuple
 from .mp3_utils import MP3File
-from .data_sources import DataSource
+from .data_sources import DataSource, extract_artist_name_from_credits
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_BASE = "https://musicbrainz.org/ws/2"
-USER_AGENT = "track-id/1.0.0 (https://github.com/your-repo/track-id)"
+USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
 
 
 class MusicBrainzDataSource(DataSource):
@@ -81,18 +81,9 @@ class MusicBrainzDataSource(DataSource):
         # First, try to find exact track matches
         for recording in search_results['recordings']:
             recording_title = recording.get('title', '').lower()
-            recording_artist = ''
-            
-            # Get artist name from the recording
-            if 'artist-credit' in recording and recording['artist-credit']:
-                # Join all artist names (handles collaborations)
-                artist_names = []
-                for artist_credit in recording['artist-credit']:
-                    if isinstance(artist_credit, dict) and 'name' in artist_credit:
-                        artist_names.append(artist_credit['name'])
-                    elif isinstance(artist_credit, str):
-                        artist_names.append(artist_credit)
-                recording_artist = ' '.join(artist_names).lower()
+            recording_artist = extract_artist_name_from_credits(
+                recording.get('artist-credit', [])
+            ).lower()
             
             # Check if artist and title match (allowing partial matches)
             if (artist.lower() in recording_artist or recording_artist in artist.lower()) and \
@@ -111,13 +102,7 @@ class MusicBrainzDataSource(DataSource):
         
         # Artist
         if 'artist-credit' in recording_data and recording_data['artist-credit']:
-            artist_names = []
-            for artist_credit in recording_data['artist-credit']:
-                if isinstance(artist_credit, dict) and 'name' in artist_credit:
-                    artist_names.append(artist_credit['name'])
-                elif isinstance(artist_credit, str):
-                    artist_names.append(artist_credit)
-            metadata['TPE1'] = ' '.join(artist_names)
+            metadata['TPE1'] = extract_artist_name_from_credits(recording_data['artist-credit'])
         
         # Album/Release
         if 'releases' in recording_data and recording_data['releases']:
@@ -156,80 +141,12 @@ class MusicBrainzDataSource(DataSource):
 
         return metadata
 
-    def enrich_mp3_file(self, file_path: str) -> Dict[str, Any]:
-        """Main function to enrich an MP3 file with MusicBrainz metadata"""
-        # Create MP3File instance
-        mp3_file = MP3File(file_path)
-        
-        # Extract artist and title from existing metadata for search
-        artist = mp3_file.metadata.get('TPE1', '')
-        title = mp3_file.metadata.get('TIT2', '')
-        
-        # If metadata is missing, try to parse from filename
-        if not artist or not title:
-            filename_artist, filename_title = mp3_file.parsed_filename
-            if filename_artist and filename_title:
-                artist = filename_artist
-                title = filename_title
-            else:
-                raise ValueError("Cannot enrich file: missing artist and title metadata in both ID3 tags and filename")
-        
-        # Search MusicBrainz
-        search_text = f'artist:"{artist}" AND recording:"{title}"'
-        search_results = self.search(search_text)
-        
-        # Find matching track
-        matching_track = self.find_matching_track(search_results, artist, title)
-        
-        if not matching_track:
-            raise ValueError(f"No matching track found on MusicBrainz for '{artist} - {title}'")
-        
-        # Get detailed recording information
-        recording_id = matching_track['id']
-        detailed_recording = self.lookup_recording(recording_id)
-        
-        # Extract metadata from MusicBrainz
-        musicbrainz_metadata = self.extract_metadata(detailed_recording)
-        
-        # Update MP3 file with new metadata
-        added_metadata = mp3_file.update_metadata(musicbrainz_metadata)
-        
-        return {
-            'file_path': file_path,
-            'search_query': search_text,
-            'musicbrainz_recording': detailed_recording,
-            'existing_metadata': mp3_file.metadata,
-            'musicbrainz_metadata': musicbrainz_metadata,
-            'added_metadata': added_metadata
-        }
+    def _build_search_query(self, artist: str, title: str) -> str:
+        """Build MusicBrainz-specific search query."""
+        return f'artist:"{artist}" AND recording:"{title}"'
+    
+    def _get_detailed_track_info(self, track_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Get detailed recording information from MusicBrainz."""
+        recording_id = track_data['id']
+        return self.lookup_recording(recording_id)
 
-
-# Legacy functions for backward compatibility
-def search_musicbrainz(search_text: str, entity_type: str = "recording") -> Dict[str, Any]:
-    """Legacy function - use MusicBrainzDataSource.search() instead."""
-    source = MusicBrainzDataSource()
-    return source.search(search_text, entity_type)
-
-
-def lookup_recording(recording_id: str, includes: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Legacy function - use MusicBrainzDataSource.lookup_recording() instead."""
-    source = MusicBrainzDataSource()
-    return source.lookup_recording(recording_id, includes)
-
-
-def find_matching_track(search_results: Dict[str, Any], artist: str, title: str) -> Optional[Dict[str, Any]]:
-    """Legacy function - use MusicBrainzDataSource.find_matching_track() instead."""
-    source = MusicBrainzDataSource()
-    return source.find_matching_track(search_results, artist, title)
-
-
-def extract_musicbrainz_metadata(recording_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Legacy function - use MusicBrainzDataSource.extract_metadata() instead."""
-    source = MusicBrainzDataSource()
-    return source.extract_metadata(recording_data)
-
-
-def enrich_mp3_file_musicbrainz(file_path: str) -> Dict[str, Any]:
-    """Legacy function - use MusicBrainzDataSource.enrich_mp3_file() instead."""
-    source = MusicBrainzDataSource()
-    return source.enrich_mp3_file(file_path)
