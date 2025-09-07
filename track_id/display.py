@@ -140,8 +140,8 @@ def display_error(message, prefix="Error"):
     console.print(f"[bold red]{prefix}: {message}[/bold red]")
 
 
-def display_unified_search_results(results):
-    """Display search results from all data sources."""
+def display_unified_search_results(results, top_n: int = 3):
+    """Display search results from all data sources in a clean summary format."""
     console.print(Panel(
         f"[bold cyan]Search completed across {len(results)} data sources[/bold cyan]",
         title="[bold blue]Unified Search Results[/bold blue]",
@@ -150,17 +150,142 @@ def display_unified_search_results(results):
     
     for source_name, result in results.items():
         if result['success']:
-            console.print(Panel(
-                JSON.from_data(result['data']),
-                title=f"[bold green]{source_name} Results[/bold green]",
-                border_style="green"
-            ))
+            display_search_summary(source_name, result['data'], top_n)
         else:
             console.print(Panel(
                 f"[red]Error: {result['error']}[/red]",
                 title=f"[bold red]{source_name} Error[/bold red]",
                 border_style="red"
             ))
+
+
+def display_search_summary(source_name: str, data: dict, top_n: int = 5):
+    """Display a clean summary of search results for a specific data source."""
+    if source_name == "Bandcamp":
+        display_bandcamp_search_summary(data, top_n)
+    elif source_name == "MusicBrainz":
+        display_musicbrainz_search_summary(data, top_n)
+    else:
+        # Fallback to JSON display for unknown sources
+        console.print(Panel(
+            JSON.from_data(data),
+            title=f"[bold green]{source_name} Results[/bold green]",
+            border_style="green"
+        ))
+
+
+def display_bandcamp_search_summary(data: dict, top_n: int = 5):
+    """Display a clean summary of Bandcamp search results."""
+    if 'auto' not in data or 'results' not in data['auto']:
+        console.print(Panel(
+            "No results found",
+            title="[bold blue]Bandcamp Results[/bold blue]",
+            border_style="blue"
+        ))
+        return
+    
+    results = data['auto']['results']
+    track_results = [r for r in results if r.get('type') == 't'][:top_n]
+    
+    if not track_results:
+        console.print(Panel(
+            "No track results found",
+            title="[bold blue]Bandcamp Results[/bold blue]",
+            border_style="blue"
+        ))
+        return
+    
+    # Create summary table
+    table = Table(title="[bold blue]Bandcamp Search Results[/bold blue]", border_style="blue")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Artist", style="cyan", no_wrap=True)
+    table.add_column("Track", style="white")
+    table.add_column("Album", style="yellow")
+    table.add_column("Type", style="dim")
+    
+    for i, track in enumerate(track_results, 1):
+        artist = track.get('band_name', 'Unknown')
+        title = track.get('name', 'Unknown')
+        album = track.get('album_name', 'Unknown')
+        track_type = track.get('type', 'Unknown')
+        
+        table.add_row(
+            str(i),
+            artist,
+            title,
+            album,
+            track_type
+        )
+    
+    console.print(table)
+    
+    # Show total count
+    total_tracks = len([r for r in results if r.get('type') == 't'])
+    if total_tracks > top_n:
+        console.print(f"[dim]Showing top {top_n} of {total_tracks} track results[/dim]")
+
+
+def display_musicbrainz_search_summary(data: dict, top_n: int = 5):
+    """Display a clean summary of MusicBrainz search results."""
+    if 'recordings' not in data:
+        console.print(Panel(
+            "No results found",
+            title="[bold green]MusicBrainz Results[/bold green]",
+            border_style="green"
+        ))
+        return
+    
+    recordings = data['recordings'][:top_n]
+    
+    if not recordings:
+        console.print(Panel(
+            "No recording results found",
+            title="[bold green]MusicBrainz Results[/bold green]",
+            border_style="green"
+        ))
+        return
+    
+    # Create summary table
+    table = Table(title="[bold green]MusicBrainz Search Results[/bold green]", border_style="green")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Artist", style="cyan", no_wrap=True)
+    table.add_column("Track", style="white")
+    table.add_column("Release", style="yellow")
+    table.add_column("ID", style="dim")
+    
+    for i, recording in enumerate(recordings, 1):
+        # Extract artist name
+        artist_name = ""
+        if 'artist-credit' in recording and recording['artist-credit']:
+            artist_names = []
+            for artist_credit in recording['artist-credit']:
+                if isinstance(artist_credit, dict) and 'name' in artist_credit:
+                    artist_names.append(artist_credit['name'])
+                elif isinstance(artist_credit, str):
+                    artist_names.append(artist_credit)
+            artist_name = ' '.join(artist_names)
+        
+        title = recording.get('title', 'Unknown')
+        release = ""
+        if 'releases' in recording and recording['releases']:
+            release = recording['releases'][0].get('title', 'Unknown')
+        
+        recording_id = recording.get('id', 'Unknown')
+        
+        table.add_row(
+            str(i),
+            artist_name,
+            title,
+            release,
+            recording_id[:8] + "..." if len(recording_id) > 8 else recording_id
+        )
+    
+    console.print(table)
+    
+    # Show total count
+    total_recordings = len(data['recordings'])
+    if total_recordings > top_n:
+        console.print(f"[dim]Showing top {top_n} of {total_recordings} recording results[/dim]")
 
 
 def display_unified_enrichment_results(result):

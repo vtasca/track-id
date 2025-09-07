@@ -44,12 +44,15 @@ def root_callback(
     pass
 
 @app.command()
-def search(search_text: str = typer.Argument(..., help="The text to search for")):
+def search(
+    search_text: str = typer.Argument(..., help="The text to search for"),
+    top: int = typer.Option(5, "--top", "-t", help="Number of top results to show per source (default: 5)")
+):
     """Search for tracks across all available data sources (Bandcamp, MusicBrainz)"""
 
     try:
         results = unified_search(search_text)
-        display_unified_search_results(results)
+        display_unified_search_results(results, top_n=top)
     except Exception as e:
         display_error(str(e))
         raise typer.Exit(1)
