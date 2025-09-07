@@ -17,10 +17,39 @@ from .mp3_utils import (
     get_mp3_info, 
     get_mp3_metadata
 )
+import importlib.metadata
 
 console = Console()
 
-app = typer.Typer()
+def version_callback(value: bool):
+    """Print version and exit."""
+    if value:
+        try:
+            version = importlib.metadata.version("track_id")
+            console.print(f"track-id version {version}")
+        except importlib.metadata.PackageNotFoundError:
+            console.print("track-id version unknown (package not installed)")
+        raise typer.Exit()
+
+app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    rich_markup_mode="rich"
+)
+
+@app.callback()
+def main(
+    version: bool = typer.Option(
+        False, 
+        "-V", 
+        "--version", 
+        help="Show version and exit",
+        callback=version_callback,
+        is_eager=True
+    )
+):
+    """Track ID - MP3 metadata enrichment tool"""
+    pass
 
 @app.command()
 def search(search_text: str = typer.Argument(..., help="The text to search for")):
