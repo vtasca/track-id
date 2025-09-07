@@ -157,22 +157,28 @@ class TestMusicBrainzAPI:
         assert "rock" in metadata["TXXX:GENRE"]
         assert "alternative" in metadata["TXXX:GENRE"]
     
-    @patch('track_id.musicbrainz_api.get_mp3_metadata')
+    @patch('track_id.musicbrainz_api.MP3File')
     @patch('track_id.musicbrainz_api.search_musicbrainz')
     @patch('track_id.musicbrainz_api.find_matching_track')
     @patch('track_id.musicbrainz_api.lookup_recording')
     @patch('track_id.musicbrainz_api.extract_musicbrainz_metadata')
-    @patch('track_id.musicbrainz_api.update_mp3_metadata')
     def test_enrich_mp3_file_musicbrainz_success(
-        self, mock_update, mock_extract, mock_lookup, 
-        mock_find, mock_search, mock_get_metadata
+        self, mock_extract, mock_lookup, 
+        mock_find, mock_search, mock_mp3_file_class
     ):
         """Test successful MP3 enrichment with MusicBrainz"""
-        # Mock existing metadata
-        mock_get_metadata.return_value = {
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.metadata = {
             "TPE1": "Test Artist",
             "TIT2": "Test Track"
         }
+        mock_mp3_file.parsed_filename = ("", "")  # No filename parsing needed
+        mock_mp3_file.update_metadata.return_value = {
+            "TALB": "Test Album",
+            "TDRC": "2020"
+        }
+        mock_mp3_file_class.return_value = mock_mp3_file
         
         # Mock search results
         mock_search.return_value = {"recordings": []}
@@ -194,11 +200,6 @@ class TestMusicBrainzAPI:
             "TALB": "Test Album"
         }
         
-        # Mock update result
-        mock_update.return_value = {
-            "TALB": "Test Album"
-        }
-        
         result = enrich_mp3_file_musicbrainz("test.mp3")
         
         assert result["file_path"] == "test.mp3"
@@ -207,31 +208,37 @@ class TestMusicBrainzAPI:
         mock_find.assert_called_once()
         mock_lookup.assert_called_once()
         mock_extract.assert_called_once()
-        mock_update.assert_called_once()
+        mock_mp3_file.update_metadata.assert_called_once()
     
-    @patch('track_id.musicbrainz_api.get_mp3_metadata')
-    def test_enrich_mp3_file_musicbrainz_no_metadata(self, mock_get_metadata):
+    @patch('track_id.musicbrainz_api.MP3File')
+    def test_enrich_mp3_file_musicbrainz_no_metadata(self, mock_mp3_file_class):
         """Test enrichment with no existing metadata"""
-        # Mock no existing metadata
-        mock_get_metadata.return_value = {}
+        # Mock MP3File instance with no metadata
+        mock_mp3_file = Mock()
+        mock_mp3_file.metadata = {}
+        mock_mp3_file.parsed_filename = ("", "")  # No filename parsing
+        mock_mp3_file_class.return_value = mock_mp3_file
         
         with pytest.raises(ValueError) as exc_info:
             enrich_mp3_file_musicbrainz("test.mp3")
         
         assert "missing artist and title metadata" in str(exc_info.value)
     
-    @patch('track_id.musicbrainz_api.get_mp3_metadata')
+    @patch('track_id.musicbrainz_api.MP3File')
     @patch('track_id.musicbrainz_api.search_musicbrainz')
     @patch('track_id.musicbrainz_api.find_matching_track')
     def test_enrich_mp3_file_musicbrainz_no_match(
-        self, mock_find, mock_search, mock_get_metadata
+        self, mock_find, mock_search, mock_mp3_file_class
     ):
         """Test enrichment with no matching track found"""
-        # Mock existing metadata
-        mock_get_metadata.return_value = {
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.metadata = {
             "TPE1": "Test Artist",
             "TIT2": "Test Track"
         }
+        mock_mp3_file.parsed_filename = ("", "")  # No filename parsing needed
+        mock_mp3_file_class.return_value = mock_mp3_file
         
         # Mock search results
         mock_search.return_value = {"recordings": []}

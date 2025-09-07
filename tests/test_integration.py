@@ -36,26 +36,24 @@ class TestIntegration:
     
     def test_full_info_workflow(self, runner):
         """Test the complete info workflow with a real-like MP3 file"""
-        with patch('track_id.track_id.get_mp3_info') as mock_info, \
-             patch('track_id.track_id.get_mp3_metadata') as mock_metadata:
-            
-            # Mock MP3 file info
-            mock_info.return_value = {
+        with patch('track_id.track_id.MP3File') as mock_mp3_file_class:
+            # Mock MP3File instance
+            mock_mp3_file = Mock()
+            mock_mp3_file.info = {
                 'file_path': 'Chaos In The CBD - Midnight In Peckham - 04 Midnight In Peckham.mp3',
                 'file_size': 2048000,
                 'duration_seconds': 245.3,
                 'bitrate': 320000,
                 'sample_rate': 44100
             }
-            
-            # Mock ID3 tags
-            mock_metadata.return_value = {
+            mock_mp3_file.metadata = {
                 'TIT2': 'Midnight In Peckham',
                 'TPE1': 'Chaos In The CBD',
                 'TALB': 'Midnight In Peckham',
                 'TRCK': '4',
                 'TDRC': '2023'
             }
+            mock_mp3_file_class.return_value = mock_mp3_file
             
             result = runner.invoke(app, ["info", "Chaos In The CBD - Midnight In Peckham - 04 Midnight In Peckham.mp3"])
             

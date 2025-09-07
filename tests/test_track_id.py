@@ -79,25 +79,24 @@ class TestTrackIdCLI:
         finally:
             os.unlink(temp_file)
     
-    @patch('track_id.track_id.get_mp3_info')
-    @patch('track_id.track_id.get_mp3_metadata')
-    def test_info_command_success(self, mock_metadata, mock_info, runner):
+    @patch('track_id.track_id.MP3File')
+    def test_info_command_success(self, mock_mp3_file_class, runner):
         """Test info command with valid MP3 file"""
-        # Mock MP3 file info
-        mock_info.return_value = {
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.info = {
             'file_path': 'test.mp3',
             'file_size': 1024000,
             'duration_seconds': 180.5,
             'bitrate': 320000,
             'sample_rate': 44100
         }
-        
-        # Mock ID3 tags
-        mock_metadata.return_value = {
+        mock_mp3_file.metadata = {
             'TIT2': 'Test Title',
             'TPE1': 'Test Artist',
             'TALB': 'Test Album'
         }
+        mock_mp3_file_class.return_value = mock_mp3_file
         
         result = runner.invoke(app, ["info", "test.mp3"])
         
@@ -108,21 +107,20 @@ class TestTrackIdCLI:
         assert "Test Title" in result.output
         assert "Test Artist" in result.output
     
-    @patch('track_id.track_id.get_mp3_info')
-    @patch('track_id.track_id.get_mp3_metadata')
-    def test_info_command_no_id3_tags(self, mock_metadata, mock_info, runner):
+    @patch('track_id.track_id.MP3File')
+    def test_info_command_no_id3_tags(self, mock_mp3_file_class, runner):
         """Test info command with MP3 file that has no ID3 tags"""
-        # Mock MP3 file info
-        mock_info.return_value = {
+        # Mock MP3File instance
+        mock_mp3_file = Mock()
+        mock_mp3_file.info = {
             'file_path': 'test.mp3',
             'file_size': 512000,
             'duration_seconds': 120.0,
             'bitrate': 256000,
             'sample_rate': 44100
         }
-        
-        # Mock empty ID3 tags
-        mock_metadata.return_value = {}
+        mock_mp3_file.metadata = {}
+        mock_mp3_file_class.return_value = mock_mp3_file
         
         result = runner.invoke(app, ["info", "test.mp3"])
         

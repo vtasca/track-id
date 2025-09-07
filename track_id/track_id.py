@@ -13,7 +13,7 @@ from .enrichment_handlers import (
 )
 from .bandcamp_api import search_bandcamp, enrich_mp3_file
 from .musicbrainz_api import search_musicbrainz, enrich_mp3_file_musicbrainz
-from .mp3_utils import get_mp3_info, get_mp3_metadata
+from .mp3_utils import MP3File
 
 def version_callback(value: bool):
     """Print version and exit."""
@@ -27,12 +27,13 @@ def version_callback(value: bool):
 
 app = typer.Typer(
     no_args_is_help=True,
-    add_completion=False,
-    rich_markup_mode="rich"
+    add_completion=True,
+    rich_markup_mode="rich",
+    context_settings={"help_option_names": ["-h", "--help"]}
 )
 
 @app.callback()
-def main(
+def root_callback(
     version: bool = typer.Option(
         False, 
         "-V", 
@@ -72,13 +73,12 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")):
     """Display information about an MP3 file"""
     
     try:
-        # Get file information and metadata
-        file_info = get_mp3_info(file_path)
-        tags = get_mp3_metadata(file_path)
+        # Create MP3File instance and get information
+        mp3_file = MP3File(file_path)
         
         # Display file information and metadata
-        display_file_info_table(file_info)
-        display_metadata_table(tags)
+        display_file_info_table(mp3_file.info)
+        display_metadata_table(mp3_file.metadata)
             
     except Exception as e:
         display_error(f"Error reading MP3 file: {e}")

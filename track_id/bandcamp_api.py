@@ -1,10 +1,6 @@
 import requests
 from typing import Dict, List, Optional, Any, Tuple
-from .mp3_utils import (
-    get_mp3_metadata, 
-    update_mp3_metadata, 
-    parse_artist_title_from_filename
-)
+from .mp3_utils import MP3File
 
 def search_bandcamp(search_text: str) -> Dict[str, Any]:
     """Search for tracks on Bandcamp and return the raw API response"""
@@ -85,16 +81,16 @@ def extract_bandcamp_metadata(track_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def enrich_mp3_file(file_path: str) -> Dict[str, Any]:
     """Main function to enrich an MP3 file with Bandcamp metadata"""
-    # Get existing metadata
-    existing_metadata = get_mp3_metadata(file_path)
+    # Create MP3File instance
+    mp3_file = MP3File(file_path)
     
     # Extract artist and title from existing metadata for search
-    artist = existing_metadata.get('TPE1', '')
-    title = existing_metadata.get('TIT2', '')
+    artist = mp3_file.metadata.get('TPE1', '')
+    title = mp3_file.metadata.get('TIT2', '')
     
     # If metadata is missing, try to parse from filename
     if not artist or not title:
-        filename_artist, filename_title = parse_artist_title_from_filename(file_path)
+        filename_artist, filename_title = mp3_file.parsed_filename
         if filename_artist and filename_title:
             artist = filename_artist
             title = filename_title
@@ -115,13 +111,13 @@ def enrich_mp3_file(file_path: str) -> Dict[str, Any]:
     bandcamp_metadata = extract_bandcamp_metadata(matching_track)
     
     # Update MP3 file with new metadata
-    added_metadata = update_mp3_metadata(file_path, bandcamp_metadata, existing_metadata)
+    added_metadata = mp3_file.update_metadata(bandcamp_metadata)
     
     return {
         'file_path': file_path,
         'search_query': search_text,
         'bandcamp_track': matching_track,
-        'existing_metadata': existing_metadata,
+        'existing_metadata': mp3_file.metadata,
         'bandcamp_metadata': bandcamp_metadata,
         'added_metadata': added_metadata
     }
