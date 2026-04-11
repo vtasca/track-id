@@ -1,9 +1,12 @@
 import pytest
 import os
+import shutil
 import tempfile
 from unittest.mock import Mock, patch, mock_open
+from mutagen.id3 import ID3
 from typer.testing import CliRunner
 from track_id import app
+from track_id.mp3_utils import MP3File
 from track_id.musicbrainz_api import MusicBrainzDataSource
 
 
@@ -240,5 +243,20 @@ class TestMusicBrainzAPI:
             with patch.object(source, 'find_matching_track', return_value=None):
                 with pytest.raises(ValueError) as exc_info:
                     source.enrich_mp3_file("test.mp3")
-                
-                assert "No matching track found on MusicBrainz" in str(exc_info.value) 
+
+                assert "No matching track found on MusicBrainz" in str(exc_info.value)
+
+    def test_txxx_genre_tag_written_to_file(self):
+        """TXXX:GENRE metadata from MusicBrainz must be persisted to the MP3 file"""
+        src = os.path.join(os.path.dirname(__file__), '..', 'audio', '3robi-marbella.mp3')
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, 'test.mp3')
+            shutil.copy(src, dest)
+
+            mp3 = MP3File(dest)
+            mp3.update_metadata({'TXXX:GENRE': 'rock, alternative'})
+
+            id3 = ID3(dest)
+            assert 'TXXX:GENRE' in id3
+            assert 'rock' in id3['TXXX:GENRE'].text[0]
+            assert 'alternative' in id3['TXXX:GENRE'].text[0] 

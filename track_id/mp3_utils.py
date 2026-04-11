@@ -153,6 +153,10 @@ class MP3File:
                     if key in tag_classes:
                         id3[key] = tag_classes[key](encoding=3, text=value)
                         added_metadata[key] = value
+                    elif key.startswith('TXXX:'):
+                        desc = key.split(':', 1)[1]
+                        id3[key] = TXXX(encoding=3, desc=desc, text=[value])
+                        added_metadata[key] = value
             
             # Handle artwork separately
             if 'artwork_url' in new_metadata and new_metadata['artwork_url']:
