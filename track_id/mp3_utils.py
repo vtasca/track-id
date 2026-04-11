@@ -1,7 +1,7 @@
 import requests
 from typing import Dict, List, Optional, Any, Tuple
 from mutagen.mp3 import MP3
-from mutagen.id3 import ID3
+from mutagen.id3 import ID3, ID3NoHeaderError, ID3TagError
 from mutagen.id3._frames import TIT2, TPE1, TALB, TDRC, TCOM, TXXX, APIC
 import os
 import re
@@ -81,9 +81,9 @@ class MP3File:
                         tags[key] = f"Artwork ({value.mime[0] if value.mime else 'unknown'})"
                     else:
                         tags[key] = "Artwork"
-        except:
+        except (ID3NoHeaderError, ID3TagError, OSError):
             pass
-        
+
         return tags
     
     def _parse_artist_title_from_filename(self) -> Tuple[str, str]:
@@ -130,7 +130,7 @@ class MP3File:
             # Load existing ID3 tags or create new ones
             try:
                 id3 = ID3(self.file_path)
-            except:
+            except (ID3NoHeaderError, ID3TagError):
                 id3 = ID3()
             
             # Map of ID3 tag keys to their corresponding classes
