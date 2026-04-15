@@ -1,11 +1,12 @@
 # track-id
 
-A nifty Python CLI tool for searching tracks on Bandcamp and displaying MP3 file information.
+A Python CLI tool for music metadata enrichment and search. Searches tracks across Bandcamp and MusicBrainz, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
 
 ## Features
 
-- **Search**: Search for tracks on Bandcamp using their API
-- **Info**: Display detailed information about MP3 files including metadata
+- **Search**: Search for tracks across Bandcamp and MusicBrainz
+- **Info**: Display detailed information about an MP3 file including all ID3 tags
+- **Enrich**: Automatically populate an MP3 file's metadata (artist, album, genre, labels, etc.) from Bandcamp and MusicBrainz
 
 ## Installation
 
@@ -16,6 +17,7 @@ The easiest way to get started is by installing `track-id` as a tool:
 uv tool install git+https://github.com/vtasca/track-id
 track-id search "Chaos In The CBD"
 track-id info "path/to/your/file.mp3"
+track-id enrich "path/to/your/file.mp3"
 ```
 
 ### Clone and install locally
@@ -32,11 +34,16 @@ uv sync
 
 ## Usage
 
-### Search for tracks on Bandcamp
+### Search for tracks
+
+Search across Bandcamp and MusicBrainz simultaneously:
 
 ```bash
 track-id search "Chaos In The CBD"
+track-id search "Burial - Archangel" --top 5
 ```
+
+The `--top` / `-t` flag controls how many results are shown per source (default: 3).
 
 ### Display MP3 file information
 
@@ -44,84 +51,63 @@ track-id search "Chaos In The CBD"
 track-id info "path/to/your/file.mp3"
 ```
 
+### Enrich an MP3 file with metadata
+
+Queries Bandcamp and MusicBrainz for a matching track and writes the retrieved metadata (album, label, genre, release year, etc.) directly into the file's ID3 tags:
+
+```bash
+track-id enrich "path/to/your/file.mp3"
+```
+
+The file must have either existing `Artist` and `Title` ID3 tags, or an `Artist - Title` filename so the tool knows what to search for. Both sources are tried; whichever matches first wins, and any additional tags found by the second source are merged in.
+
 ## Development
 
 ### Setting up the development environment
 
 ```bash
-# Install development dependencies
 uv sync --dev
 ```
 
 ### Running tests
 
 ```bash
-# Install development dependencies (if not already installed)
-uv sync --dev
-
 # Run all tests
 uv run pytest
 
-# Run with verbose output
-uv run pytest -v
-
 # Run with coverage
-uv run pytest --cov=track_id --cov=id3_tags --cov-report=term-missing
+uv run pytest --cov=track_id --cov-report=term-missing
 
-# Run specific test files
-uv run pytest tests/test_id3_tags.py -v
-
-# Run specific test classes
-uv run pytest tests/test_track_id.py::TestTrackIdCLI -v
-
-# Run specific test methods
-uv run pytest tests/test_track_id.py::TestTrackIdCLI::test_search_command_exists -v
-```
-
-### Test Structure
-
-The test suite is organized as follows:
-
-- `tests/test_id3_tags.py`: Tests for the ID3 tag mapping functionality
-- `tests/test_track_id.py`: Tests for the main CLI application
-- `tests/test_integration.py`: Integration tests for complete workflows
-- `tests/conftest.py`: Shared fixtures and test configuration
-
-### Test Categories
-
-- **Unit Tests**: Test individual functions and components in isolation
-- **Integration Tests**: Test complete workflows and interactions between components
-- **CLI Tests**: Test the command-line interface using Typer's testing utilities
-
-### Running specific test types
-
-```bash
-# Run only unit tests
-uv run pytest -m unit
-
-# Run only integration tests
-uv run pytest -m integration
-
-# Run tests excluding slow ones
-uv run pytest -m "not slow"
+# Run a specific file
+uv run pytest tests/test_data_sources.py -v
 ```
 
 ## Project Structure
 
 ```
 track-id/
-├── track_id/            # Main package
-│   ├── __init__.py      # Package initialization
-│   ├── track_id.py      # Main CLI application
-│   └── id3_tags.py      # ID3 tag mapping definitions
-├── tests/               # Test suite
-│   ├── __init__.py
-│   ├── conftest.py      # Shared fixtures
-│   ├── test_id3_tags.py # ID3 tag tests
-│   ├── test_track_id.py # Main application tests
-│   └── test_integration.py # Integration tests
-├── pyproject.toml       # Project configuration
-└── README.md           # This file
+├── track_id/
+│   ├── track_id.py           # CLI commands (Typer app)
+│   ├── unified_api.py        # Orchestrates search/enrich across all sources
+│   ├── data_sources.py       # Abstract base class + registry
+│   ├── bandcamp_api.py       # Bandcamp data source
+│   ├── musicbrainz_api.py    # MusicBrainz data source
+│   ├── enrichment_handlers.py# Shared enrichment logic
+│   ├── mp3_utils.py          # MP3File class — ID3 read/write, filename parsing
+│   ├── display.py            # Rich console output
+│   ├── id3_tags.py           # Canonical ID3 tag name mapping
+│   └── __init__.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_data_sources.py
+│   ├── test_bandcamp_api.py
+│   ├── test_musicbrainz_api.py
+│   ├── test_artwork.py
+│   ├── test_id3_tags.py
+│   ├── test_track_id.py
+│   └── test_integration.py
+├── pyproject.toml
+└── README.md
 ```
 
 ## Contributing

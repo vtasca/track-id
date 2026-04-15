@@ -8,7 +8,7 @@
 
 4. ✅ **Add tests for `data_sources.py` core aggregation logic**: `search_all_sources()` and `enrich_with_all_sources()` have no dedicated tests. Partial failure (one source up, one down) is completely untested.
 
-5. **Document the `enrich` command** (`README.md`): The README covers `search` and `info` but never mentions `enrich`, which is arguably the most important command.
+5. ✅ **Document the `enrich` command** (`README.md`): The README covers `search` and `info` but never mentions `enrich`, which is arguably the most important command.
 
 6. **Add a size limit to artwork downloads** (`mp3_utils.py:212`): The full response is loaded into memory with no cap. A large or malicious image could exhaust memory.
 
