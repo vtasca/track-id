@@ -202,6 +202,9 @@ class MP3File:
         """Refresh the info cache by reloading from file."""
         self._info = None
 
+MAX_ARTWORK_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
 def download_artwork(url: str) -> Optional[bytes]:
     """Download artwork from a URL and return the image data as bytes"""
     try:
@@ -212,11 +215,25 @@ def download_artwork(url: str) -> Optional[bytes]:
                 "Chrome/123.0.6312.86 Safari/537.36"
             ),
         }
-        
-        response = requests.get(url, headers=headers, timeout=10)
+
+        response = requests.get(url, headers=headers, timeout=10, stream=True)
         response.raise_for_status()
-        
-        return response.content
+
+        content_length = response.headers.get('Content-Length')
+        if content_length and int(content_length) > MAX_ARTWORK_SIZE:
+            print(f"Warning: Artwork at {url} exceeds size limit, skipping")
+            return None
+
+        chunks = []
+        downloaded = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            downloaded += len(chunk)
+            if downloaded > MAX_ARTWORK_SIZE:
+                print(f"Warning: Artwork at {url} exceeds size limit, skipping")
+                return None
+            chunks.append(chunk)
+
+        return b''.join(chunks)
     except Exception as e:
         print(f"Warning: Could not download artwork from {url}: {e}")
         return None

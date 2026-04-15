@@ -10,7 +10,7 @@
 
 5. ✅ **Document the `enrich` command** (`README.md`): The README covers `search` and `info` but never mentions `enrich`, which is arguably the most important command.
 
-6. **Add a size limit to artwork downloads** (`mp3_utils.py:212`): The full response is loaded into memory with no cap. A large or malicious image could exhaust memory.
+6. ✅ **Add a size limit to artwork downloads** (`mp3_utils.py:212`): The full response is loaded into memory with no cap. A large or malicious image could exhaust memory.
 
 7. **Make artwork support consistent across sources**: Bandcamp extracts and downloads artwork; MusicBrainz never does. Users get artwork or not depending on which source matched, with no indication why.
 
