@@ -110,7 +110,7 @@ class MusicBrainzDataSource(DataSource):
             release = recording_data['releases'][0]
             if 'title' in release:
                 metadata['TALB'] = release['title']
-            
+
             # Year from release date
             if 'date' in release and release['date']:
                 # Extract year from date (format: YYYY-MM-DD or YYYY)
@@ -121,6 +121,10 @@ class MusicBrainzDataSource(DataSource):
                     year = date_str
                 if year.isdigit():
                     metadata['TDRC'] = year
+
+            # Artwork from Cover Art Archive
+            if 'id' in release:
+                metadata['artwork_url'] = f"https://coverartarchive.org/release/{release['id']}/front"
         
         # Composer (if available)
         if 'artist-credit' in recording_data and recording_data['artist-credit']:

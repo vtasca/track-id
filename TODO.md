@@ -12,6 +12,6 @@
 
 6. ✅ **Add a size limit to artwork downloads** (`mp3_utils.py:212`): The full response is loaded into memory with no cap. A large or malicious image could exhaust memory.
 
-7. **Make artwork support consistent across sources**: Bandcamp extracts and downloads artwork; MusicBrainz never does. Users get artwork or not depending on which source matched, with no indication why.
+7. ✅ **Make artwork support consistent across sources**: Bandcamp extracts and downloads artwork; MusicBrainz never does. Users get artwork or not depending on which source matched, with no indication why.
 
 8. **Add filename parsing edge case tests**: `_parse_artist_title_from_filename()` has no tests for unusual inputs (multiple separators, bracket-only filenames, accented characters). Failures are silent — enrichment proceeds with wrong artist/title.

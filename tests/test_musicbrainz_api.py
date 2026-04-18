@@ -128,6 +128,7 @@ class TestMusicBrainzAPI:
             "artist-credit": [{"name": "Test Artist"}],
             "releases": [
                 {
+                    "id": "release-abc-123",
                     "title": "Test Album",
                     "date": "2020-01-01"
                 }
@@ -137,10 +138,10 @@ class TestMusicBrainzAPI:
                 {"name": "alternative", "count": 5}
             ]
         }
-        
+
         source = MusicBrainzDataSource()
         metadata = source.extract_metadata(recording_data)
-        
+
         assert metadata["TIT2"] == "Test Track"
         assert metadata["TPE1"] == "Test Artist"
         assert metadata["TALB"] == "Test Album"
@@ -148,6 +149,32 @@ class TestMusicBrainzAPI:
         assert metadata["TCOM"] == "Test Artist"
         assert "rock" in metadata["TXXX:GENRE"]
         assert "alternative" in metadata["TXXX:GENRE"]
+        assert metadata["artwork_url"] == "https://coverartarchive.org/release/release-abc-123/front"
+
+    def test_extract_musicbrainz_metadata_no_artwork_without_release_id(self):
+        """No artwork_url should be set when the release has no MusicBrainz ID"""
+        recording_data = {
+            "title": "Test Track",
+            "artist-credit": [{"name": "Test Artist"}],
+            "releases": [{"title": "Test Album"}],
+        }
+
+        source = MusicBrainzDataSource()
+        metadata = source.extract_metadata(recording_data)
+
+        assert "artwork_url" not in metadata
+
+    def test_extract_musicbrainz_metadata_no_artwork_without_releases(self):
+        """No artwork_url should be set when the recording has no releases"""
+        recording_data = {
+            "title": "Test Track",
+            "artist-credit": [{"name": "Test Artist"}],
+        }
+
+        source = MusicBrainzDataSource()
+        metadata = source.extract_metadata(recording_data)
+
+        assert "artwork_url" not in metadata
     
     @patch('track_id.data_sources.MP3File')
     @patch('track_id.musicbrainz_api.MusicBrainzDataSource.search')
