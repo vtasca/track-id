@@ -1,12 +1,12 @@
 # track-id
 
-A Python CLI tool for music metadata enrichment and search. Searches tracks across Bandcamp and MusicBrainz, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
+A Python CLI tool for music metadata enrichment and search. Searches tracks across Bandcamp, MusicBrainz, and Discogs, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
 
 ## Features
 
-- **Search**: Search for tracks across Bandcamp and MusicBrainz
+- **Search**: Search for tracks across Bandcamp, MusicBrainz, and Discogs
 - **Info**: Display detailed information about an MP3 file including all ID3 tags
-- **Enrich**: Automatically populate an MP3 file's metadata (artist, album, genre, labels, etc.) from Bandcamp and MusicBrainz
+- **Enrich**: Automatically populate an MP3 file's metadata (artist, album, genre, label, styles, track number, artwork, etc.) from Bandcamp, MusicBrainz, and Discogs
 
 ## Installation
 
@@ -36,7 +36,7 @@ uv sync
 
 ### Search for tracks
 
-Search across Bandcamp and MusicBrainz simultaneously:
+Search across Bandcamp, MusicBrainz, and Discogs simultaneously:
 
 ```bash
 track-id search "Chaos In The CBD"
@@ -53,13 +53,15 @@ track-id info "path/to/your/file.mp3"
 
 ### Enrich an MP3 file with metadata
 
-Queries Bandcamp and MusicBrainz for a matching track and writes the retrieved metadata (album, label, genre, release year, etc.) directly into the file's ID3 tags:
+Queries Bandcamp, MusicBrainz, and Discogs for a matching track and writes the retrieved metadata directly into the file's ID3 tags:
 
 ```bash
 track-id enrich "path/to/your/file.mp3"
 ```
 
-The file must have either existing `Artist` and `Title` ID3 tags, or an `Artist - Title` filename so the tool knows what to search for. Both sources are tried; whichever matches first wins, and any additional tags found by the second source are merged in.
+The file must have either existing `Artist` and `Title` ID3 tags, or an `Artist - Title` filename so the tool knows what to search for. All three sources are tried and their results merged — existing tags are never overwritten.
+
+Tags populated across sources include: `Title`, `Artist`, `Album Artist`, `Album`, `Year`, `Track Number`, `Genre`, `Publisher/Label`, `Style` (Discogs community tags), `Artwork`, and a `Discogs URL` reference.
 
 ## Development
 
@@ -92,6 +94,7 @@ track-id/
 │   ├── data_sources.py       # Abstract base class + registry
 │   ├── bandcamp_api.py       # Bandcamp data source
 │   ├── musicbrainz_api.py    # MusicBrainz data source
+│   ├── discogs_api.py        # Discogs data source
 │   ├── enrichment_handlers.py# Shared enrichment logic
 │   ├── mp3_utils.py          # MP3File class — ID3 read/write, filename parsing
 │   ├── display.py            # Rich console output
@@ -102,6 +105,7 @@ track-id/
 │   ├── test_data_sources.py
 │   ├── test_bandcamp_api.py
 │   ├── test_musicbrainz_api.py
+│   ├── test_discogs_api.py
 │   ├── test_artwork.py
 │   ├── test_id3_tags.py
 │   ├── test_track_id.py
