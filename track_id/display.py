@@ -108,6 +108,31 @@ def display_musicbrainz_search_details(result: Dict[str, Any]) -> None:
     console.print(search_panel)
 
 
+def display_discogs_search_details(result: Dict[str, Any]) -> None:
+    """Display Discogs-specific search details."""
+    detail = result['discogs_track']
+    stub = detail.get('_release_stub', {})
+    matched = detail.get('_matched_track')
+    source = detail.get('_source', 'release')
+
+    artists = detail.get('artists', [])
+    artist_str = ' & '.join(a.get('name', '') for a in artists if a.get('name'))
+
+    track_line = ""
+    if matched:
+        track_line = f"\n[cyan]Matched Track:[/cyan] {matched.get('title', 'Unknown')} (pos {matched.get('position', '?')}, {matched.get('duration', '?')})"
+
+    search_panel = Panel(
+        f"[cyan]Search Query:[/cyan] {result['search_query']}\n"
+        f"[cyan]Source:[/cyan] {source} — {artist_str} / {detail.get('title', 'Unknown')} ({detail.get('year', '?')})"
+        f"{track_line}\n"
+        f"[cyan]Styles:[/cyan] {', '.join(detail.get('styles', []) or ['—'])}",
+        title="[bold magenta]Discogs Search Results[/bold magenta]",
+        border_style="magenta"
+    )
+    console.print(search_panel)
+
+
 def filter_actual_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
     """Filter out skipped metadata entries to show only actual additions."""
     return {k: v for k, v in metadata.items() 
@@ -161,14 +186,47 @@ def display_unified_search_results(results: Dict[str, Any], top_n: int = 3) -> N
             ))
 
 
+def display_discogs_search_summary(data: Dict[str, Any], top_n: int = 3) -> None:
+    """Display a clean summary of Discogs search results."""
+    results = data.get('results', [])
+    if not results:
+        console.print(Panel(
+            "No results found",
+            title="[bold magenta]Discogs Results[/bold magenta]",
+            border_style="magenta"
+        ))
+        return
+
+    table = Table(title="[bold magenta]Discogs Search Results[/bold magenta]", border_style="magenta")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("Release", style="white")
+    table.add_column("Format", style="cyan", no_wrap=True)
+    table.add_column("Year", style="yellow", width=6)
+    table.add_column("Label", style="dim")
+
+    for i, release in enumerate(results[:top_n], 1):
+        title = release.get('title', 'Unknown')
+        fmt = ', '.join(release.get('format', []))
+        year = str(release.get('year', ''))
+        labels = release.get('label', [])
+        label = labels[0] if labels else ''
+        table.add_row(str(i), title, fmt, year, label)
+
+    console.print(table)
+
+    if len(results) > top_n:
+        console.print(f"[dim]Showing top {top_n} of {len(results)} release results[/dim]")
+
+
 def display_search_summary(source_name: str, data: Dict[str, Any], top_n: int = 3) -> None:
     """Display a clean summary of search results for a specific data source."""
     if source_name == "Bandcamp":
         display_bandcamp_search_summary(data, top_n)
     elif source_name == "MusicBrainz":
         display_musicbrainz_search_summary(data, top_n)
+    elif source_name == "Discogs":
+        display_discogs_search_summary(data, top_n)
     else:
-        # Fallback to JSON display for unknown sources
         console.print(Panel(
             JSON.from_data(data),
             title=f"[bold green]{source_name} Results[/bold green]",
@@ -302,6 +360,8 @@ def display_unified_enrichment_results(result: Dict[str, Any]) -> None:
         display_bandcamp_search_details(successful)
     elif 'musicbrainz_recording' in successful:
         display_musicbrainz_search_details(successful)
+    elif 'discogs_track' in successful:
+        display_discogs_search_details(successful)
     
     # Show added metadata
     actual_added_metadata = filter_actual_metadata(successful['added_metadata'])

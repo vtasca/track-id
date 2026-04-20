@@ -3,9 +3,10 @@
 import typer
 from typing import Callable, Any, Dict
 from .display import display_enrichment_success, display_enrichment_results, display_error
-from .display import display_bandcamp_search_details, display_musicbrainz_search_details
+from .display import display_bandcamp_search_details, display_musicbrainz_search_details, display_discogs_search_details
 from .bandcamp_api import BandcampDataSource
 from .musicbrainz_api import MusicBrainzDataSource
+from .discogs_api import DiscogsDataSource
 
 
 def handle_enrichment_command(
@@ -60,4 +61,15 @@ def handle_musicbrainz_enrichment(file_path: str) -> None:
         enrich_func=musicbrainz_source.enrich_mp3_file,
         search_details_func=display_musicbrainz_search_details,
         service_name="MusicBrainz"
+    )
+
+
+def handle_discogs_enrichment(file_path: str) -> None:
+    """Handle Discogs enrichment command."""
+    discogs_source = DiscogsDataSource()
+    handle_enrichment_command(
+        file_path=file_path,
+        enrich_func=discogs_source.enrich_mp3_file,
+        search_details_func=display_discogs_search_details,
+        service_name="Discogs"
     )

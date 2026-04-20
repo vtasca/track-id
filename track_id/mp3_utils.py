@@ -2,7 +2,7 @@ import requests
 from typing import Dict, List, Optional, Any, Tuple
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, ID3NoHeaderError, ID3TagError
-from mutagen.id3._frames import TIT2, TPE1, TALB, TDRC, TCOM, TXXX, APIC
+from mutagen.id3._frames import TIT2, TPE1, TPE2, TALB, TDRC, TCOM, TRCK, TCON, TPUB, TXXX, APIC
 import os
 import re
 
@@ -135,12 +135,16 @@ class MP3File:
             
             # Map of ID3 tag keys to their corresponding classes
             tag_classes = {
-                'TIT2': TIT2,  # Title
-                'TPE1': TPE1,  # Artist
-                'TALB': TALB,  # Album
-                'TDRC': TDRC,  # Year
-                'TCOM': TCOM,  # Composer
-                'TXXX': TXXX   # Custom
+                'TIT2': TIT2,
+                'TPE1': TPE1,
+                'TPE2': TPE2,
+                'TALB': TALB,
+                'TDRC': TDRC,
+                'TCOM': TCOM,
+                'TRCK': TRCK,
+                'TCON': TCON,
+                'TPUB': TPUB,
+                'TXXX': TXXX,
             }
             
             for key, value in new_metadata.items():

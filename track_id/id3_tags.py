@@ -28,6 +28,7 @@ ID3_TAG_NAMES = {
     'TIT1': 'Content Group',
     'TIT3': 'Subtitle',
     'TIT4': 'Movement Name',
+    'TCON': 'Genre',
     'TKEY': 'Initial Key',
     'TMED': 'Media Type',
     'TMOO': 'Mood',

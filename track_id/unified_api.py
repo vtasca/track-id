@@ -4,6 +4,7 @@ from typing import Dict, Any
 from .data_sources import data_source_registry, search_all_sources, enrich_with_all_sources
 from .bandcamp_api import BandcampDataSource
 from .musicbrainz_api import MusicBrainzDataSource
+from .discogs_api import DiscogsDataSource
 
 
 def initialize_data_sources() -> None:
@@ -15,6 +16,10 @@ def initialize_data_sources() -> None:
     # Register MusicBrainz data source
     musicbrainz_source = MusicBrainzDataSource()
     data_source_registry.register(musicbrainz_source)
+
+    # Register Discogs data source
+    discogs_source = DiscogsDataSource()
+    data_source_registry.register(discogs_source)
 
 
 def search(query: str) -> Dict[str, Any]:
