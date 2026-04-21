@@ -1,6 +1,5 @@
 import pytest
 import os
-import shutil
 import tempfile
 from unittest.mock import Mock, patch, mock_open
 from mutagen.id3 import ID3
@@ -275,10 +274,12 @@ class TestMusicBrainzAPI:
 
     def test_txxx_genre_tag_written_to_file(self):
         """TXXX:GENRE metadata from MusicBrainz must be persisted to the MP3 file"""
-        src = os.path.join(os.path.dirname(__file__), '..', 'audio', '3robi-marbella.mp3')
         with tempfile.TemporaryDirectory() as tmp:
             dest = os.path.join(tmp, 'test.mp3')
-            shutil.copy(src, dest)
+            # A real audio frame is not required for this assertion:
+            # ID3 tags can be written to an empty .mp3 container.
+            with open(dest, "wb") as file_obj:
+                file_obj.write(b"")
 
             mp3 = MP3File(dest)
             mp3.update_metadata({'TXXX:GENRE': 'rock, alternative'})
