@@ -1,4 +1,5 @@
 # track-id
+[![Package Validation](https://github.com/vtasca/track-id/actions/workflows/package-validation.yml/badge.svg)](https://github.com/vtasca/track-id/actions/workflows/package-validation.yml) [![Publish PyPI](https://github.com/vtasca/track-id/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/vtasca/track-id/actions/workflows/publish-pypi.yml) [![PyPI version](https://img.shields.io/pypi/v/track-id.svg)](https://pypi.org/project/track-id/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/vtasca/track-id/blob/main/LICENSE)
 
 A Python CLI tool for music metadata enrichment and search. Searches tracks across Bandcamp, MusicBrainz, and Discogs, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
 
