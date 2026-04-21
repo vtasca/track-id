@@ -12,9 +12,19 @@ A Python CLI tool for music metadata enrichment and search. Searches tracks acro
 
 ### Using uv
 
-The easiest way to get started is by installing `track-id` as a tool:
+Install from PyPI as a tool:
 ```bash
-uv tool install git+https://github.com/vtasca/track-id
+uv tool install track-id
+track-id --version
+track-id search "Chaos In The CBD"
+```
+
+### Using pip
+
+Install from PyPI with pip:
+```bash
+pip install track-id
+track-id --version
 track-id search "Chaos In The CBD"
 track-id info "path/to/your/file.mp3"
 track-id enrich "path/to/your/file.mp3"

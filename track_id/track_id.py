@@ -17,7 +17,7 @@ def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
         try:
-            version = importlib.metadata.version("track_id")
+            version = importlib.metadata.version("track-id")
             console.print(f"track-id version {version}")
         except importlib.metadata.PackageNotFoundError:
             console.print("track-id version unknown (package not installed)")
