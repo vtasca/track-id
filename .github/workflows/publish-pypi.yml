@@ -2,6 +2,15 @@ name: publish-pypi
 
 on:
   workflow_dispatch:
+    inputs:
+      repository:
+        description: "Target repository (testpypi or pypi)"
+        required: true
+        default: testpypi
+        type: choice
+        options:
+          - testpypi
+          - pypi
   push:
     tags:
       - "v*"
@@ -34,3 +43,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ inputs.repository == 'testpypi' && 'https://test.pypi.org/legacy/' || 'https://upload.pypi.org/legacy/' }}

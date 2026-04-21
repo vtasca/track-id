@@ -17,7 +17,7 @@ This guide documents the release path that is now wired into this repository.
 ## What this repository now includes
 
 - Package metadata in `pyproject.toml` ready for PyPI.
-- CI package check workflow: `.github/workflows/package-check.yml`.
+- CI package check workflow: `.github/workflows/package-validation.yml`.
 - Publish workflow: `.github/workflows/publish-pypi.yml`.
 
 ## Release checklist (every release)
@@ -26,7 +26,7 @@ This guide documents the release path that is now wired into this repository.
 2. Commit and push the version change.
 3. Wait for package checks to pass in GitHub Actions.
 4. Publish to **TestPyPI** (recommended dry run):
-   - Run the `Publish Python package` workflow manually.
+   - Run the `publish-pypi` workflow manually.
    - Choose input `repository = testpypi`.
 5. Verify install from TestPyPI:
    - `python -m venv /tmp/track-id-test && source /tmp/track-id-test/bin/activate`
