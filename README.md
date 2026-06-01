@@ -1,10 +1,11 @@
 # track-id
 [![Package Validation](https://github.com/vtasca/track-id/actions/workflows/package-validation.yml/badge.svg)](https://github.com/vtasca/track-id/actions/workflows/package-validation.yml) [![Publish PyPI](https://github.com/vtasca/track-id/actions/workflows/publish-pypi.yml/badge.svg)](https://github.com/vtasca/track-id/actions/workflows/publish-pypi.yml) [![PyPI version](https://img.shields.io/pypi/v/track-id.svg)](https://pypi.org/project/track-id/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/vtasca/track-id/blob/main/LICENSE)
 
-A Python CLI tool for music metadata enrichment and search. Searches tracks across Bandcamp, MusicBrainz, and Discogs, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
+A Python CLI tool for music metadata enrichment, search, and download. Searches and downloads tracks from Soulseek, displays MP3 file info, and enriches MP3 files with metadata from Bandcamp, MusicBrainz, and Discogs.
 
 ## Features
 
+- **Download**: Search Soulseek for a track and download the best match, with automatic metadata enrichment
 - **Search**: Search for tracks across Bandcamp, MusicBrainz, and Discogs
 - **Info**: Display detailed information about an MP3 file including all ID3 tags
 - **Enrich**: Automatically populate an MP3 file's metadata (artist, album, genre, label, styles, track number, artwork, etc.) from Bandcamp, MusicBrainz, and Discogs
@@ -44,6 +45,44 @@ uv sync
 ```
 
 ## Usage
+
+### Download a track from Soulseek
+
+Searches the Soulseek network, ranks candidates by bitrate and filename match, downloads the best result, and automatically enriches the file with metadata from Bandcamp, MusicBrainz, and Discogs:
+
+```bash
+track-id download "Aphex Twin - Windowlicker"
+track-id download "Burial - Archangel" --output-dir ~/Music
+track-id download "DJ Krush - Ha Doh" --min-bitrate 320 --timeout 20
+```
+
+Files are saved to `downloads/` by default. Credentials are required — set them once:
+
+```bash
+# Option 1: .env file in the project root (copy from .env.example)
+cp .env.example .env  # then fill in your username and password
+
+# Option 2: environment variables
+export SOULSEEK_USERNAME=your_username
+export SOULSEEK_PASSWORD=your_password
+
+# Option 3: ~/.config/track-id/config.toml
+# [soulseek]
+# username = "your_username"
+# password = "your_password"
+```
+
+A free Soulseek account can be created at [slsknet.org](https://www.slsknet.org/news/node/1).
+
+Available options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--output-dir` / `-o` | `downloads/` | Directory to save the file |
+| `--min-bitrate` | `192` | Minimum acceptable bitrate in kbps |
+| `--timeout` / `-T` | `10.0` | Seconds to collect search results |
+| `--attempts` | `5` | Max download attempts before giving up |
+| `--no-enrich` | — | Skip metadata enrichment after download |
 
 ### Search for tracks
 
@@ -107,6 +146,8 @@ track-id/
 │   ├── musicbrainz_api.py    # MusicBrainz data source
 │   ├── discogs_api.py        # Discogs data source
 │   ├── enrichment_handlers.py# Shared enrichment logic
+│   ├── soulseek_downloader.py# Soulseek download via aioslsk
+│   ├── config.py             # Credential loading (.env / env vars / config file)
 │   ├── mp3_utils.py          # MP3File class — ID3 read/write, filename parsing
 │   ├── display.py            # Rich console output
 │   ├── id3_tags.py           # Canonical ID3 tag name mapping
@@ -117,10 +158,13 @@ track-id/
 │   ├── test_bandcamp_api.py
 │   ├── test_musicbrainz_api.py
 │   ├── test_discogs_api.py
+│   ├── test_soulseek_downloader.py
+│   ├── test_config.py
 │   ├── test_artwork.py
 │   ├── test_id3_tags.py
 │   ├── test_track_id.py
 │   └── test_integration.py
+├── .env.example              # Credential template
 ├── pyproject.toml
 └── README.md
 ```
