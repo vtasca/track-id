@@ -1,5 +1,6 @@
 """Discogs data source for music metadata enrichment."""
 
+import difflib
 import requests
 import time
 from typing import Dict, List, Optional, Any
@@ -41,10 +42,39 @@ class DiscogsDataSource(DataSource):
         results = search_results.get("results", [])
         if not results:
             return None
-        # Prefer releases linked to a master (more canonical umbrella release)
-        with_master = [r for r in results if r.get("master_id")]
-        best = with_master[0] if with_master else results[0]
-        # Pass search context through so _get_detailed_track_info can match the tracklist
+
+        def score(r: Dict[str, Any]) -> float:
+            result_title = r.get("title", "")
+            # Discogs titles are formatted "Artist - Release Title"
+            if " - " in result_title:
+                result_artist, release_title = result_title.split(" - ", 1)
+            else:
+                result_artist, release_title = "", result_title
+
+            s = 0.0
+
+            # How closely does the release title match the track title?
+            title_sim = difflib.SequenceMatcher(
+                None, title.lower(), release_title.lower()
+            ).ratio()
+            s += title_sim * 3.0
+
+            # Artist match
+            if artist.lower() in result_artist.lower() or result_artist.lower() in artist.lower():
+                s += 1.0
+
+            # Penalise compilations — these surface often but are rarely the right match
+            compilation_signals = ["various", "cd1", "cd2", "vol.", "volume", "compilation", "best of", "greatest hits"]
+            if any(sig in release_title.lower() or sig in result_artist.lower() for sig in compilation_signals):
+                s -= 2.0
+
+            # Slight preference for canonical master releases
+            if r.get("master_id"):
+                s += 0.3
+
+            return s
+
+        best = max(results, key=score)
         return {**best, "_search_artist": artist, "_search_title": title}
 
     def _fetch_master(self, master_id: int) -> Dict[str, Any]:

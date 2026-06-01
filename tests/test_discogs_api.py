@@ -87,26 +87,37 @@ class TestDiscogsSearch:
 
 
 class TestFindMatchingTrack:
-    def test_prefers_result_with_master_id(self, source):
+    def test_prefers_title_match_over_master_id(self, source):
+        # A release whose title matches the track should beat a master-linked compilation
         results = {
             "results": [
-                {"id": 1, "title": "No Master"},
-                {"id": 2, "master_id": 99, "title": "Has Master"},
-                {"id": 3, "master_id": 100, "title": "Also Has Master"},
+                {"id": 1, "master_id": 99, "title": "Various - CD1 (Chosen by fans)"},
+                {"id": 2, "title": "Aphex Twin - Windowlicker"},
             ]
         }
-        match = source.find_matching_track(results, "Artist", "Title")
+        match = source.find_matching_track(results, "Aphex Twin", "Windowlicker")
         assert match["id"] == 2
 
-    def test_falls_back_to_first_when_no_master(self, source):
+    def test_penalises_compilations(self, source):
         results = {
             "results": [
-                {"id": 10, "title": "First Result"},
-                {"id": 11, "title": "Second Result"},
+                {"id": 1, "master_id": 5, "title": "Various - Best Of Electronic"},
+                {"id": 2, "title": "Aphex Twin - Windowlicker"},
             ]
         }
-        match = source.find_matching_track(results, "Artist", "Title")
-        assert match["id"] == 10
+        match = source.find_matching_track(results, "Aphex Twin", "Windowlicker")
+        assert match["id"] == 2
+
+    def test_prefers_master_as_tiebreaker(self, source):
+        # When title similarity is equal, prefer the master-linked release
+        results = {
+            "results": [
+                {"id": 1, "title": "Aphex Twin - Windowlicker"},
+                {"id": 2, "master_id": 99, "title": "Aphex Twin - Windowlicker"},
+            ]
+        }
+        match = source.find_matching_track(results, "Aphex Twin", "Windowlicker")
+        assert match["id"] == 2
 
     def test_annotates_search_context(self, source):
         results = {"results": [{"id": 1, "master_id": 5, "title": "X"}]}
@@ -116,6 +127,12 @@ class TestFindMatchingTrack:
 
     def test_returns_none_on_empty_results(self, source):
         assert source.find_matching_track({"results": []}, "A", "T") is None
+
+    def test_matches_without_artist_separator(self, source):
+        # Some Discogs results have no " - " in the title
+        results = {"results": [{"id": 1, "title": "Windowlicker"}]}
+        match = source.find_matching_track(results, "Aphex Twin", "Windowlicker")
+        assert match is not None
 
 
 class TestFindTrackInTracklist:

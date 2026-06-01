@@ -164,7 +164,8 @@ def display_enrichment_results(result: Dict[str, Any], search_details_func: Any)
 
 def display_error(message: str, prefix: str = "Error") -> None:
     """Display error message in red."""
-    console.print(f"[bold red]{prefix}: {message}[/bold red]")
+    from rich.markup import escape
+    console.print(f"[bold red]{prefix}:[/bold red] {escape(message)}")
 
 
 def display_unified_search_results(results: Dict[str, Any], top_n: int = 3) -> None:
@@ -338,6 +339,38 @@ def display_musicbrainz_search_summary(data: Dict[str, Any], top_n: int = 3) -> 
     total_recordings = len(data['recordings'])
     if total_recordings > top_n:
         console.print(f"[dim]Showing top {top_n} of {total_recordings} recording results[/dim]")
+
+
+def display_slsk_candidates(candidates: List[Any], top_n: int = 5) -> None:
+    """Display ranked Soulseek download candidates."""
+    if not candidates:
+        console.print(Panel("No results found on Soulseek", title="[bold cyan]Soulseek[/bold cyan]", border_style="cyan"))
+        return
+
+    table = Table(title="[bold cyan]Soulseek Candidates[/bold cyan]", border_style="cyan")
+    table.add_column("#", style="dim", width=3)
+    table.add_column("User", style="yellow", no_wrap=True)
+    table.add_column("Filename", style="white")
+    table.add_column("Bitrate", style="green", width=9)
+    table.add_column("Size", style="dim", width=9)
+    table.add_column("Score", style="cyan", width=6)
+
+    for i, r in enumerate(candidates[:top_n], 1):
+        bitrate = f"{r.bitrate} kbps" if r.bitrate else "?"
+        size = f"{r.file_size / 1024 / 1024:.1f} MB" if r.file_size else "?"
+        table.add_row(str(i), r.username, r.display_name, bitrate, size, f"{r.score:.2f}")
+
+    console.print(table)
+    if len(candidates) > top_n:
+        console.print(f"[dim]Showing top {top_n} of {len(candidates)} candidates[/dim]")
+
+
+def display_download_complete(dest_path: Any, enriched: bool = False) -> None:
+    """Display download success panel."""
+    lines = [f"[bold green]Saved:[/bold green] {dest_path}"]
+    if enriched:
+        lines.append("[dim]Metadata enrichment applied[/dim]")
+    console.print(Panel("\n".join(lines), title="[bold green]Download Complete[/bold green]", border_style="green"))
 
 
 def display_unified_enrichment_results(result: Dict[str, Any]) -> None:
