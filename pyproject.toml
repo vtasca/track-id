@@ -8,7 +8,7 @@ license = { file = "LICENSE" }
 authors = [
     { name = "track-id contributors" },
 ]
-keywords = ["mp3", "id3", "metadata", "music", "cli", "bandcamp", "musicbrainz", "discogs"]
+keywords = ["mp3", "id3", "metadata", "music", "cli", "download", "soulseek", "bandcamp", "musicbrainz", "discogs"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",

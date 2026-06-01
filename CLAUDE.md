@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Track-ID** is a Python CLI tool for music metadata enrichment and search. It searches tracks across multiple music data sources (Bandcamp, MusicBrainz), displays MP3 file info, and enriches MP3 files with metadata from external music databases.
+**Track-ID** is a Python CLI tool for music downloading, search, and metadata enrichment. It downloads tracks from Soulseek, searches across Bandcamp, MusicBrainz, and Discogs, displays MP3 file info, and enriches MP3 files with metadata from external music databases.
 
 ## Commands
 
@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync
 
 # Run the CLI
+uv run track-id download "Artist - Title"
 uv run track-id search "Artist - Title"
 uv run track-id info path/to/file.mp3
 uv run track-id enrich path/to/file.mp3
@@ -45,11 +46,12 @@ New music sources are added by subclassing `DataSource` in `data_sources.py` and
 
 ```
 CLI (track_id.py)
-  → unified_api.py        # aggregates across sources
-    → DataSourceRegistry  # dispatches to each source
-      → BandcampDataSource / MusicBrainzDataSource
+  → soulseek_downloader.py  # download command: P2P search + download via aioslsk
+  → unified_api.py          # search/enrich: aggregates across metadata sources
+    → DataSourceRegistry    # dispatches to each source
+      → BandcampDataSource / MusicBrainzDataSource / DiscogsDataSource
     → MP3File (mp3_utils.py)  # reads/writes ID3 tags via mutagen
-  → display.py            # Rich console output
+  → display.py              # Rich console output
 ```
 
 ### Key Files
@@ -59,6 +61,8 @@ CLI (track_id.py)
 | `track_id/track_id.py` | CLI commands (Typer app) |
 | `track_id/unified_api.py` | Orchestrates search/enrich across all sources |
 | `track_id/data_sources.py` | Abstract base class + registry |
+| `track_id/soulseek_downloader.py` | Soulseek P2P download via aioslsk |
+| `track_id/config.py` | Credential loading (.env / env vars / config file) |
 | `track_id/mp3_utils.py` | `MP3File` class — ID3 read/write, filename parsing |
 | `track_id/display.py` | All Rich console output |
 | `track_id/enrichment_handlers.py` | Shared logic reused by concrete data sources |
