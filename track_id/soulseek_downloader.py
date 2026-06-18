@@ -32,6 +32,9 @@ _MIN_FILE_BYTES = 500 * 1024       # 500 KB
 _MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
 _SPEED_REFERENCE_BPS = 1_000_000   # 1 MB/s — avg_speed at/above this scores 1.0
 
+_DEFAULT_PARALLELISM = 3           # candidates to race for an upload slot at once
+_DEFAULT_QUEUE_TIMEOUT = 30.0      # seconds to wait in a peer's queue before moving on
+
 
 class DownloadError(Exception):
     pass
@@ -233,6 +236,123 @@ class SoulseekDownloader:
                 f"Download from {candidate.username} failed: {reason}"
             )
 
+        return self._finalize_transfer(transfer, dest)
+
+    async def race_download(
+        self,
+        candidates: List[SlskResult],
+        dest: Path,
+        on_attempt: Optional[Callable[[SlskResult], None]] = None,
+        on_start: Optional[Callable[[SlskResult], None]] = None,
+        on_progress: Optional[Callable[[int, Optional[int]], None]] = None,
+        parallelism: int = _DEFAULT_PARALLELISM,
+        queue_timeout: float = _DEFAULT_QUEUE_TIMEOUT,
+        download_timeout: float = 180.0,
+    ) -> Path:
+        """Race several candidates for an upload slot; first to start sending wins.
+
+        A Soulseek transfer is slot-gated: requesting a file only places you in
+        the peer's upload queue. Instead of waiting out one peer's queue before
+        trying the next, we request up to `parallelism` candidates at once and
+        take the first peer that actually starts sending bytes, aborting the
+        rest. A candidate that fails outright, or sits queued past
+        `queue_timeout` without starting, is dropped and replaced by the next
+        candidate in line. If the winning transfer then fails mid-download, we
+        fall back to whatever candidates remain.
+
+        `on_attempt` fires when a candidate is requested, `on_start` when one
+        wins the race and begins downloading, `on_progress` during that download.
+        """
+        assert self._client is not None, "Must be used as async context manager"
+
+        pending = list(candidates)
+        # Each entry: [transfer, candidate, requested_at]
+        active: List[List] = []
+
+        async def _fill() -> None:
+            while pending and len(active) < parallelism:
+                cand = pending.pop(0)
+                if on_attempt:
+                    on_attempt(cand)
+                transfer = await self._client.transfers.download(
+                    username=cand.username,
+                    filename=cand.remote_path,
+                )
+                active.append([transfer, cand, time.monotonic()])
+
+        await _fill()
+
+        winner: Optional[List] = None
+        while active and winner is None:
+            now = time.monotonic()
+            for entry in list(active):
+                transfer, cand, requested_at = entry
+                state = transfer.state.VALUE
+                started = transfer.start_time is not None or transfer.bytes_transfered > 0
+
+                if started and state in (
+                    TransferState.State.DOWNLOADING,
+                    TransferState.State.COMPLETE,
+                ):
+                    winner = entry
+                    break
+                if state in _TERMINAL_STATES:
+                    # Failed/aborted before it ever started — drop and refill.
+                    active.remove(entry)
+                    await _fill()
+                elif now - requested_at > queue_timeout:
+                    # Stuck in the peer's queue too long — abort and refill.
+                    await self._safe_abort(transfer)
+                    active.remove(entry)
+                    await _fill()
+
+            if winner is None and active:
+                await asyncio.sleep(0.25)
+
+        if winner is None:
+            raise DownloadError(
+                f"No peer granted an upload slot for '{dest.stem}' "
+                f"(tried {len(candidates)} candidate(s))"
+            )
+
+        win_transfer, win_cand, _ = winner
+        # Abort the losers so we don't waste their bandwidth or ours.
+        for transfer, _cand, _ts in active:
+            if transfer is not win_transfer:
+                await self._safe_abort(transfer)
+
+        if on_start:
+            on_start(win_cand)
+
+        success = await self._poll_transfer(win_transfer, download_timeout, on_progress)
+        if not success:
+            # The winner stalled or failed after starting; try the rest.
+            if pending:
+                return await self.race_download(
+                    pending, dest,
+                    on_attempt=on_attempt,
+                    on_start=on_start,
+                    on_progress=on_progress,
+                    parallelism=parallelism,
+                    queue_timeout=queue_timeout,
+                    download_timeout=download_timeout,
+                )
+            reason = win_transfer.fail_reason or win_transfer.abort_reason or "unknown"
+            raise DownloadError(
+                f"Download from {win_cand.username} failed: {reason}"
+            )
+
+        return self._finalize_transfer(win_transfer, dest)
+
+    async def _safe_abort(self, transfer: Transfer) -> None:
+        """Abort a transfer, swallowing errors from already-terminal transfers."""
+        try:
+            await self._client.transfers.abort(transfer)  # type: ignore[union-attr]
+        except Exception:
+            pass
+
+    def _finalize_transfer(self, transfer: Transfer, dest: Path) -> Path:
+        """Validate a completed transfer's file and move it to dest."""
         if not transfer.local_path or not os.path.exists(transfer.local_path):
             raise DownloadError(
                 f"Transfer completed but file not found at {transfer.local_path!r}"

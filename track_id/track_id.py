@@ -11,6 +11,9 @@ from .display import (
     display_error,
     display_file_info_table,
     display_metadata_table,
+    display_playlist_album_header,
+    display_playlist_summary,
+    display_playlist_track,
     display_search_results,
     display_slsk_candidates,
     display_unified_enrichment_results,
@@ -142,6 +145,52 @@ def download(
             console.print(f"[yellow]Warning: enrichment failed: {e}[/yellow]")
 
 
+@app.command(name="download-playlist")
+def download_playlist(
+    url: str = typer.Argument(..., help="YouTube playlist URL of albums to download"),
+    output_dir: Path = typer.Option(Path("downloads"), "--output-dir", "-o", help="Directory to save downloaded albums"),
+    min_bitrate: int = typer.Option(192, "--min-bitrate", help="Minimum acceptable bitrate in kbps"),
+    search_timeout: float = typer.Option(10.0, "--timeout", "-T", help="Seconds to wait for each Soulseek search"),
+    max_attempts: int = typer.Option(5, "--attempts", help="Maximum download attempts per track"),
+    username: Optional[str] = typer.Option(None, "--username", "-u", envvar="SOULSEEK_USERNAME", help="Soulseek username", show_default=False),
+    password: Optional[str] = typer.Option(None, "--password", "-p", envvar="SOULSEEK_PASSWORD", help="Soulseek password", show_default=False),
+) -> None:
+    """Download every album in a YouTube playlist from Soulseek, track by track"""
+    from .config import load_soulseek_config
+    from .playlist_downloader import download_playlist_async
+
+    try:
+        config = load_soulseek_config(username, password)
+    except ValueError as e:
+        display_error(str(e))
+        raise typer.Exit(1)
+
+    output_dir = output_dir.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    console.print(f"[cyan]Reading playlist:[/cyan] {url}")
+
+    try:
+        results = asyncio.run(
+            download_playlist_async(
+                url=url,
+                config=config,
+                output_dir=output_dir,
+                min_bitrate=min_bitrate,
+                search_timeout=search_timeout,
+                max_attempts=max_attempts,
+                on_album_start=display_playlist_album_header,
+                on_track_done=display_playlist_track,
+            )
+        )
+    except ValueError as e:
+        display_error(str(e))
+        raise typer.Exit(1)
+
+    console.print()
+    display_playlist_summary(results)
+
+
 def _strip_existing_tags(path: Path) -> None:
     """Remove all ID3 tags from a downloaded file so enrichment sources write fresh metadata."""
     from mutagen.id3 import ID3, ID3NoHeaderError
@@ -159,7 +208,7 @@ async def _download_async(
     search_timeout: float,
     max_attempts: int,
 ) -> Path:
-    from .soulseek_downloader import DownloadError, SoulseekDownloader, _sanitize_filename
+    from .soulseek_downloader import SoulseekDownloader, _sanitize_filename
 
     # Derive destination filename from search text
     dest = output_dir / f"{_sanitize_filename(search_text)}.mp3"
@@ -179,37 +228,39 @@ async def _download_async(
 
         from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
 
-        for attempt, candidate in enumerate(candidates[:max_attempts], 1):
-            console.print(
-                f"[cyan]Attempt {attempt}/{min(max_attempts, len(candidates))}:[/cyan] "
-                f"downloading from [yellow]{candidate.username}[/yellow]  "
-                f"[dim]{candidate.display_name}[/dim]"
+        racers = candidates[:max_attempts]
+        console.print(
+            f"[cyan]Racing top {len(racers)} candidate(s) for an upload slot...[/cyan]"
+        )
+
+        def on_attempt(c: "SlskResult") -> None:  # type: ignore[name-defined]
+            console.print(f"  [dim]Requesting from [yellow]{c.username}[/yellow]: {c.display_name}[/dim]")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task("Waiting for a slot...", total=None, start=False)
+
+            def on_start(c: "SlskResult") -> None:  # type: ignore[name-defined]
+                progress.update(task_id, description=f"Downloading from {c.username}", total=c.file_size or None)
+                progress.start_task(task_id)
+
+            def on_progress(bytes_done: int, total: Optional[int]) -> None:
+                progress.update(task_id, completed=bytes_done, total=total or None)
+
+            return await dl.race_download(
+                racers,
+                dest,
+                on_attempt=on_attempt,
+                on_start=on_start,
+                on_progress=on_progress,
             )
-
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(),
-                DownloadColumn(),
-                TransferSpeedColumn(),
-                TimeRemainingColumn(),
-                console=console,
-            ) as progress:
-                task_id = progress.add_task(
-                    "Downloading...",
-                    total=candidate.file_size or None,
-                )
-
-                def on_progress(bytes_done: int, total: Optional[int]) -> None:
-                    progress.update(task_id, completed=bytes_done, total=total or candidate.file_size or None)
-
-                try:
-                    return await dl.download_file(candidate, dest, on_progress=on_progress)
-                except DownloadError as e:
-                    console.print(f"[yellow]  Failed: {e}[/yellow]")
-                    continue
-
-    raise DownloadError(f"All {max_attempts} download attempts failed for '{search_text}'")
 
 
 if __name__ == "__main__":

@@ -155,3 +155,149 @@ class TestSlskResultDisplayName:
     def test_bare_filename(self):
         r = _make_result(remote_path="file.mp3")
         assert r.display_name == "file.mp3"
+
+
+# --- race_download ---
+
+import asyncio
+
+from aioslsk.transfer.model import TransferState
+
+from track_id.config import SoulseekConfig
+from track_id.soulseek_downloader import DownloadError, SoulseekDownloader
+
+_S = TransferState.State
+
+
+class _FakeState:
+    def __init__(self, value):
+        self.VALUE = value
+
+
+class _FakeTransfer:
+    """A transfer whose state walks through `states`, one step per access."""
+
+    def __init__(self, states, *, started=False, local_path=None, filesize=None):
+        self._states = states
+        self._idx = 0
+        self.start_time = 1.0 if started else None
+        self.bytes_transfered = filesize or 0
+        self.filesize = filesize
+        self.local_path = local_path
+        self.fail_reason = None
+        self.abort_reason = None
+
+    @property
+    def state(self):
+        value = self._states[self._idx]
+        if self._idx < len(self._states) - 1:
+            self._idx += 1
+        return _FakeState(value)
+
+
+class _FakeTransfers:
+    def __init__(self, transfers):
+        self._queue = list(transfers)
+        self.requested = []   # (username, filename) in request order
+        self.aborted = []     # transfer objects that were aborted
+
+    async def download(self, username, filename):
+        self.requested.append((username, filename))
+        return self._queue.pop(0)
+
+    async def abort(self, transfer):
+        self.aborted.append(transfer)
+
+
+class _FakeClient:
+    def __init__(self, transfers):
+        self.transfers = _FakeTransfers(transfers)
+
+
+def _downloader(transfers, download_dir):
+    dl = SoulseekDownloader(SoulseekConfig("u", "p"), download_dir)
+    dl._client = _FakeClient(transfers)
+    return dl
+
+
+def _winner_transfer(tmp_path, name="src.mp3"):
+    """A transfer that starts downloading then completes, with a real file."""
+    src = tmp_path / name
+    src.write_bytes(b"x" * 1024)
+    return _FakeTransfer([_S.DOWNLOADING, _S.COMPLETE], started=True,
+                         local_path=str(src), filesize=1024)
+
+
+class TestRaceDownload:
+    def test_first_started_peer_wins_and_losers_aborted(self, tmp_path):
+        loser_a = _FakeTransfer([_S.QUEUED])
+        winner = _winner_transfer(tmp_path)
+        loser_b = _FakeTransfer([_S.QUEUED])
+        dl = _downloader([loser_a, winner, loser_b], tmp_path)
+        cands = [
+            _make_result(username="a"),
+            _make_result(username="winner"),
+            _make_result(username="b"),
+        ]
+        dest = tmp_path / "out.mp3"
+
+        result = asyncio.run(dl.race_download(cands, dest, parallelism=3))
+
+        assert result == dest
+        assert dest.exists()
+        aborted = dl._client.transfers.aborted
+        assert loser_a in aborted and loser_b in aborted
+        assert winner not in aborted
+
+    def test_failed_peer_dropped_and_next_requested(self, tmp_path):
+        failed = _FakeTransfer([_S.FAILED])
+        winner = _winner_transfer(tmp_path)
+        dl = _downloader([failed, winner], tmp_path)
+        cands = [_make_result(username="dead"), _make_result(username="good")]
+        dest = tmp_path / "out.mp3"
+
+        # parallelism=1 forces sequential refill on failure
+        result = asyncio.run(dl.race_download(cands, dest, parallelism=1))
+
+        assert result == dest
+        assert dl._client.transfers.requested == [
+            ("dead", cands[0].remote_path),
+            ("good", cands[1].remote_path),
+        ]
+
+    def test_peer_stuck_in_queue_is_aborted_and_replaced(self, tmp_path):
+        stuck = _FakeTransfer([_S.QUEUED])  # never starts
+        winner = _winner_transfer(tmp_path)
+        dl = _downloader([stuck, winner], tmp_path)
+        cands = [_make_result(username="slow"), _make_result(username="good")]
+        dest = tmp_path / "out.mp3"
+
+        # queue_timeout=0 means an unstarted peer is dropped on first poll
+        result = asyncio.run(
+            dl.race_download(cands, dest, parallelism=1, queue_timeout=0.0)
+        )
+
+        assert result == dest
+        assert stuck in dl._client.transfers.aborted
+
+    def test_all_candidates_fail_raises(self, tmp_path):
+        dl = _downloader(
+            [_FakeTransfer([_S.FAILED]), _FakeTransfer([_S.FAILED])], tmp_path
+        )
+        cands = [_make_result(username="a"), _make_result(username="b")]
+
+        with pytest.raises(DownloadError):
+            asyncio.run(dl.race_download(cands, tmp_path / "out.mp3", parallelism=2))
+
+    def test_winner_failing_midway_falls_back_to_next(self, tmp_path):
+        # First peer starts then dies; the fallback peer completes.
+        flaky = _FakeTransfer([_S.DOWNLOADING, _S.FAILED], started=True)
+        winner = _winner_transfer(tmp_path)
+        dl = _downloader([flaky, winner], tmp_path)
+        cands = [_make_result(username="flaky"), _make_result(username="good")]
+        dest = tmp_path / "out.mp3"
+
+        result = asyncio.run(dl.race_download(cands, dest, parallelism=1))
+
+        assert result == dest
+        assert dest.exists()
