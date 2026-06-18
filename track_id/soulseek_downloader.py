@@ -205,12 +205,6 @@ class SoulseekDownloader:
 
     async def __aenter__(self) -> "SoulseekDownloader":
         self._client = SoulSeekClient(self._build_settings())
-        await self._client.start()
-        await self._client.login()
-        # Give the distributed network a moment to establish peer connections
-        # before issuing a search — searching immediately after login returns
-        # far fewer results than a fully-connected client.
-        await asyncio.sleep(10)
         return self
 
     async def __aexit__(self, *_) -> None:
@@ -218,18 +212,74 @@ class SoulseekDownloader:
             await self._client.stop()
             self._client = None
 
+    async def connect(
+        self,
+        warmup_timeout: float = 0.0,
+        on_progress: Optional[Callable[[float], None]] = None,
+    ) -> None:
+        """Start the client and log in.
+
+        This previously waited a fixed 10s after login for the distributed
+        network to "warm up", on the theory that searching too early returns far
+        fewer results. Measurement didn't bear that out: the same query issued
+        immediately after login returned identical peer/file counts to one issued
+        16s later (and a distributed `parent` is never required to get results).
+        So the warm-up now defaults off and `connect()` returns as soon as login
+        completes.
+
+        If `warmup_timeout > 0`, poll until the distributed network assigns us a
+        parent — returning the instant it does, with `warmup_timeout` as a
+        ceiling — instead of sleeping a flat interval. Kept as an opt-in escape
+        hatch in case a network ever does need the settle time. `on_progress`,
+        if given, is called each poll with the elapsed seconds.
+        """
+        assert self._client is not None, "Must be used as async context manager"
+        await self._client.start()
+        await self._client.login()
+
+        if warmup_timeout <= 0:
+            return
+
+        start = time.monotonic()
+        deadline = start + warmup_timeout
+        while time.monotonic() < deadline:
+            if self._client.distributed_network.parent is not None:
+                logger.info("Joined distributed network after %.1fs", time.monotonic() - start)
+                return
+            if on_progress:
+                on_progress(time.monotonic() - start)
+            await asyncio.sleep(0.25)
+        logger.info(
+            "Warm-up ceiling (%.0fs) reached without a distributed parent; searching anyway",
+            warmup_timeout,
+        )
+
     async def search(
         self,
         query: str,
         timeout: float,
         min_bitrate: int,
+        on_progress: Optional[Callable[[int, int], None]] = None,
     ) -> List[SlskResult]:
-        """Search the network and return ranked, filtered results."""
+        """Search the network and return ranked, filtered results.
+
+        Results stream in from peers over the `timeout` window. If `on_progress`
+        is given, it's called periodically with the running (file_count,
+        peer_count) so the caller can show the tally growing.
+        """
         assert self._client is not None, "Must be used as async context manager"
 
         logger.info("Searching Soulseek for %r (timeout=%.0fs, min_bitrate=%d)", query, timeout, min_bitrate)
         request = await self._client.searches.search(query)
-        await asyncio.sleep(timeout)
+
+        # Poll the accumulating results instead of sleeping the window out in one
+        # shot, so we can report progress as peers respond.
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if on_progress:
+                file_count = sum(len(sr.shared_items) for sr in request.results)
+                on_progress(file_count, len(request.results))
+            await asyncio.sleep(0.25)
 
         candidates: List[SlskResult] = []
         raw_file_count = 0
