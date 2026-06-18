@@ -1,14 +1,132 @@
 """Display utilities for Rich console output formatting."""
 
 from typing import Dict, Any, List, Optional
+from rich import box
 from rich.console import Console
 from rich.json import JSON
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TransferSpeedColumn,
+)
 from rich.table import Table
 from rich.panel import Panel
+from rich.text import Text
 from .id3_tags import ID3_TAG_NAMES
 from .data_sources import extract_artist_name_from_credits
 
 console = Console()
+
+
+# ---------------------------------------------------------------------------
+# Download command design system — "monochrome + one accent".
+#
+# A near-monochrome grey ramp plus a single accent hue (warm amber), rationed
+# to the one element that matters at any moment: the active download and the
+# final success mark. No boxes or borders — structure comes from alignment.
+# Importance is encoded by brightness, not by an array of competing colors.
+# (See style_demos/ for the exploration this was chosen from.)
+# ---------------------------------------------------------------------------
+
+ACCENT = "#d7af5f"   # the single accent hue — warm amber
+DL_TEXT = "grey93"   # primary content
+DL_MUTED = "grey62"  # secondary labels, headers, units
+DL_FAINT = "grey39"  # diagnostics, scaffolding, rules
+
+_ACCENT_BOLD = f"bold {ACCENT}"
+_LEAD = "›"     # › quiet lead-in marker
+_DONE = "✓"     # ✓ completion
+
+
+def display_log_path(path: Any) -> None:
+    """The most de-emphasized line: where diagnostics are being written."""
+    console.print()
+    console.print(Text(f"logging diagnostics to {path}", style=DL_FAINT))
+    console.print()
+
+
+def connecting_text() -> Text:
+    """Label for the 'connecting to Soulseek' status spinner."""
+    return Text("connecting to Soulseek", style=DL_MUTED)
+
+
+def collecting_text(files: int, peers: int) -> Text:
+    """Live status text while search results stream in."""
+    line = Text()
+    line.append("collecting results  ", style=DL_MUTED)
+    line.append(f"{files} files", style=DL_TEXT)
+    line.append(" from ", style=DL_MUTED)
+    line.append(f"{peers} peers", style=DL_TEXT)
+    return line
+
+
+def display_search_header(query: str, timeout_s: float) -> None:
+    """Announce the search query and its timeout."""
+    header = Text()
+    header.append(f"{_LEAD} ", style=DL_FAINT)
+    header.append("searching  ", style=DL_MUTED)
+    header.append(str(query), style=DL_TEXT)
+    console.print(header)
+    console.print(Text(f"  timeout {timeout_s:.0f}s", style=DL_FAINT))
+    console.print()
+
+
+def display_collected(files: int, peers: int) -> None:
+    """Final summary line once result collection has finished."""
+    line = Text()
+    line.append("  collected  ", style=DL_MUTED)
+    line.append(f"{files} files", style=DL_TEXT)
+    line.append(" from ", style=DL_MUTED)
+    line.append(f"{peers} peers", style=DL_TEXT)
+    console.print(line)
+    console.print()
+
+
+def display_racing(count: int) -> None:
+    """Announce that candidates are being raced for an upload slot."""
+    line = Text()
+    line.append(f"{_LEAD} ", style=DL_FAINT)
+    line.append(f"racing top {count} candidates for an upload slot", style=DL_MUTED)
+    console.print(line)
+
+
+def display_request(username: str) -> None:
+    """A single 'requesting from <peer>' sub-line."""
+    req = Text()
+    req.append("    requesting from ", style=DL_MUTED)
+    req.append(str(username), style=DL_TEXT)
+    console.print(req)
+
+
+def make_download_progress() -> Progress:
+    """A Progress styled in the download design system.
+
+    The amber accent appears only here (the active download) and on the final
+    success line. Add the task with fields ``user`` (the peer, shown in accent)
+    and a ``description`` prefix; e.g.::
+
+        task = progress.add_task("waiting for a slot", user="", total=None, start=False)
+        progress.update(task, description="downloading from", user=peer, total=size)
+    """
+    return Progress(
+        SpinnerColumn(style=DL_MUTED),
+        TextColumn("{task.description}", style=DL_MUTED),
+        TextColumn("{task.fields[user]}", style=_ACCENT_BOLD),
+        BarColumn(
+            bar_width=32,
+            complete_style=ACCENT,
+            finished_style=ACCENT,
+            style=DL_FAINT,
+            pulse_style=ACCENT,
+        ),
+        TextColumn("{task.percentage:>3.0f}%", style=DL_MUTED),
+        TransferSpeedColumn(),
+        DownloadColumn(),
+        console=console,
+    )
 
 
 def extract_artist_name_from_track_data(track_data: Dict[str, Any], source_type: str) -> str:
@@ -342,18 +460,32 @@ def display_musicbrainz_search_summary(data: Dict[str, Any], top_n: int = 3) -> 
 
 
 def display_slsk_candidates(candidates: List[Any], top_n: int = 5) -> None:
-    """Display ranked Soulseek download candidates."""
+    """Display ranked Soulseek download candidates.
+
+    Borderless, near-monochrome: aligned columns under a single dim header
+    rule. No accent here — it is reserved for the active download and success.
+    """
     if not candidates:
-        console.print(Panel("No results found on Soulseek", title="[bold cyan]Soulseek[/bold cyan]", border_style="cyan"))
+        console.print(Text("no results found on Soulseek", style=DL_MUTED))
         return
 
-    table = Table(title="[bold cyan]Soulseek Candidates[/bold cyan]", border_style="cyan")
-    table.add_column("#", style="dim", width=3)
-    table.add_column("User", style="yellow", no_wrap=True)
-    table.add_column("Filename", style="white")
-    table.add_column("Bitrate", style="green", width=9)
-    table.add_column("Size", style="dim", width=9)
-    table.add_column("Score", style="cyan", width=6)
+    total = len(candidates)
+    label = f"top {top_n} of {total}" if total > top_n else f"{total} candidates"
+    console.print(Text(label, style=DL_MUTED))
+
+    table = Table(
+        box=box.SIMPLE_HEAD,
+        show_edge=False,
+        pad_edge=False,
+        border_style=DL_FAINT,
+        header_style=DL_MUTED,
+    )
+    table.add_column("", justify="right", style=DL_MUTED)
+    table.add_column("user", style=DL_TEXT, no_wrap=True)
+    table.add_column("filename", style=DL_TEXT)
+    table.add_column("bitrate", justify="right", style=DL_MUTED)
+    table.add_column("size", justify="right", style=DL_MUTED)
+    table.add_column("score", justify="right", style=DL_MUTED)
 
     for i, r in enumerate(candidates[:top_n], 1):
         bitrate = f"{r.bitrate} kbps" if r.bitrate else "?"
@@ -361,16 +493,20 @@ def display_slsk_candidates(candidates: List[Any], top_n: int = 5) -> None:
         table.add_row(str(i), r.username, r.display_name, bitrate, size, f"{r.score:.2f}")
 
     console.print(table)
-    if len(candidates) > top_n:
-        console.print(f"[dim]Showing top {top_n} of {len(candidates)} candidates[/dim]")
+    console.print()
 
 
 def display_download_complete(dest_path: Any, enriched: bool = False) -> None:
-    """Display download success panel."""
-    lines = [f"[bold green]Saved:[/bold green] {dest_path}"]
+    """Display download success — the one other place the accent appears."""
+    ok = Text()
+    ok.append(f"{_DONE} ", style=_ACCENT_BOLD)
+    ok.append("download complete  ", style=_ACCENT_BOLD)
+    ok.append(str(dest_path), style=DL_TEXT)
+    console.print()
+    console.print(ok)
     if enriched:
-        lines.append("[dim]Metadata enrichment applied[/dim]")
-    console.print(Panel("\n".join(lines), title="[bold green]Download Complete[/bold green]", border_style="green"))
+        console.print(Text("  metadata enrichment applied", style=DL_FAINT))
+    console.print()
 
 
 def display_unified_enrichment_results(result: Dict[str, Any]) -> None:
