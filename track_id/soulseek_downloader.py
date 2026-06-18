@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -137,6 +138,54 @@ def _sanitize_filename(s: str) -> str:
     return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", s).strip()
 
 
+# Map a claimed extension to the set of container formats whose magic bytes
+# we accept for it. Several extensions share a container (m4a/aac/mp4) or are
+# routinely mislabeled between lossy/lossless siblings.
+_FORMAT_ALIASES = {
+    "mp3": {"mp3"},
+    "flac": {"flac"},
+    "ogg": {"ogg"},
+    "wav": {"wav"},
+    "m4a": {"mp4"},
+    "aac": {"mp4", "aac"},
+}
+
+
+def _sniff_audio_format(path: Path) -> Optional[str]:
+    """Identify a file's real container from its header bytes.
+
+    Returns a canonical format name (``mp3``, ``flac``, ``ogg``, ``wav``,
+    ``mp4``, ``aac``) or ``None`` if the bytes match no known audio format —
+    e.g. an HTML error page or truncated junk served under a music filename.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return None
+
+    if len(head) < 4:
+        return None
+
+    if head[:4] == b"fLaC":
+        return "flac"
+    if head[:4] == b"OggS":
+        return "ogg"
+    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
+        return "wav"
+    if head[4:8] == b"ftyp":
+        return "mp4"
+    if head[:3] == b"ID3":
+        return "mp3"
+    # MPEG audio frame sync: 11 set bits (0xFFE).
+    if head[0] == 0xFF and (head[1] & 0xE0) == 0xE0:
+        # ADTS AAC streams share the sync word; layer bits 0b00 mark AAC.
+        if (head[1] & 0x06) == 0x00:
+            return "aac"
+        return "mp3"
+    return None
+
+
 class SoulseekDownloader:
     """Async context manager wrapping an aioslsk client."""
 
@@ -183,19 +232,32 @@ class SoulseekDownloader:
         await asyncio.sleep(timeout)
 
         candidates: List[SlskResult] = []
+        raw_file_count = 0
+        rejected_format: Counter[str] = Counter()
+        rejected_bitrate = 0
+        rejected_files: List[str] = []
         for sr in request.results:
             for fd in sr.shared_items:
+                raw_file_count += 1
                 attrs = fd.get_attribute_map()
                 bitrate = attrs.get(AttributeKey.BITRATE)
                 duration = attrs.get(AttributeKey.DURATION)
+                name = os.path.basename(fd.filename.replace("\\", "/"))
 
-                # Skip formats we can't use
+                # Skip formats we can't use. Many peers leave the protocol
+                # `extension` field blank, so fall back to the filename suffix.
                 ext = fd.extension.lower().lstrip(".")
+                if not ext:
+                    ext = os.path.splitext(name)[1].lower().lstrip(".")
                 if ext not in ("mp3", "flac", "ogg", "aac", "m4a", "wav"):
+                    rejected_format[ext or "<none>"] += 1
+                    rejected_files.append(f"{name} [format:{ext or '<none>'}]")
                     continue
 
                 # Hard bitrate filter
                 if bitrate is not None and bitrate < min_bitrate:
+                    rejected_bitrate += 1
+                    rejected_files.append(f"{name} [{bitrate}kbps]")
                     continue
 
                 candidates.append(
@@ -203,7 +265,7 @@ class SoulseekDownloader:
                         username=sr.username,
                         remote_path=fd.filename,
                         file_size=fd.filesize,
-                        extension=fd.extension,
+                        extension=ext,
                         bitrate=bitrate,
                         duration=duration,
                         avg_speed=sr.avg_speed,
@@ -213,7 +275,29 @@ class SoulseekDownloader:
 
         artist, _, title = query.partition(" - ")
         ranked = rank_results(candidates, artist.strip(), title.strip() or query)
-        logger.info("Search %r returned %d usable candidate(s)", query, len(ranked))
+        logger.info(
+            "Search %r returned %d usable candidate(s) (%d raw file(s) from %d peer(s) before filtering)",
+            query,
+            len(ranked),
+            raw_file_count,
+            len(request.results),
+        )
+        if not ranked and raw_file_count:
+            format_summary = ", ".join(
+                f"{ext}×{n}" for ext, n in rejected_format.most_common()
+            ) or "none"
+            logger.info(
+                "All %d raw file(s) for %r were filtered out — "
+                "rejected by bitrate<%d: %d, rejected by format: %d (%s)",
+                raw_file_count,
+                query,
+                min_bitrate,
+                rejected_bitrate,
+                sum(rejected_format.values()),
+                format_summary,
+            )
+            for entry in rejected_files:
+                logger.info("  rejected: %s", entry)
         return ranked
 
     async def download_file(
@@ -242,7 +326,7 @@ class SoulseekDownloader:
             )
 
         logger.info("Download from %s succeeded -> %s", candidate.username, dest)
-        return self._finalize_transfer(transfer, dest)
+        return self._finalize_transfer(transfer, dest, candidate.extension)
 
     async def race_download(
         self,
@@ -348,7 +432,7 @@ class SoulseekDownloader:
                 f"Download from {win_cand.username} failed: {reason}"
             )
 
-        return self._finalize_transfer(win_transfer, dest)
+        return self._finalize_transfer(win_transfer, dest, win_cand.extension)
 
     async def _safe_abort(self, transfer: Transfer) -> None:
         """Abort a transfer, swallowing errors from already-terminal transfers."""
@@ -357,17 +441,49 @@ class SoulseekDownloader:
         except Exception:
             pass
 
-    def _finalize_transfer(self, transfer: Transfer, dest: Path) -> Path:
+    def _finalize_transfer(
+        self,
+        transfer: Transfer,
+        dest: Path,
+        expected_ext: Optional[str] = None,
+    ) -> Path:
         """Validate a completed transfer's file and move it to dest."""
         if not transfer.local_path or not os.path.exists(transfer.local_path):
             raise DownloadError(
                 f"Transfer completed but file not found at {transfer.local_path!r}"
             )
 
+        self._verify_format(Path(transfer.local_path), expected_ext)
+
         if transfer.local_path != str(dest):
             shutil.move(transfer.local_path, dest)
 
         return dest
+
+    def _verify_format(self, path: Path, expected_ext: Optional[str]) -> None:
+        """Confirm the downloaded bytes are real audio of the claimed format.
+
+        The filename is whatever a stranger on the network typed, so we sniff
+        the header rather than trust the extension. A file that is not audio at
+        all is rejected (the caller can fall back to another peer); a genuine
+        audio file whose container merely disagrees with its extension is kept
+        but logged, since the content is still usable.
+        """
+        actual = _sniff_audio_format(path)
+        if actual is None:
+            raise DownloadError(
+                f"Downloaded file {path.name!r} is not a recognized audio "
+                f"format (header did not match mp3/flac/ogg/wav/mp4/aac)"
+            )
+
+        ext = (expected_ext or "").lower().lstrip(".")
+        if ext and actual not in _FORMAT_ALIASES.get(ext, {ext}):
+            logger.warning(
+                "Format mismatch for %s: filename claims .%s but content is %s",
+                path.name,
+                ext,
+                actual,
+            )
 
     async def _poll_transfer(
         self,

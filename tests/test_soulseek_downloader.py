@@ -1,7 +1,12 @@
 """Unit tests for Soulseek downloader ranking and filtering logic."""
 
 import pytest
-from track_id.soulseek_downloader import SlskResult, rank_results, _sanitize_filename
+from track_id.soulseek_downloader import (
+    SlskResult,
+    rank_results,
+    _sanitize_filename,
+    _sniff_audio_format,
+)
 
 
 def _make_result(**kwargs) -> SlskResult:
@@ -157,6 +162,35 @@ class TestSlskResultDisplayName:
         assert r.display_name == "file.mp3"
 
 
+class TestSniffAudioFormat:
+    @pytest.mark.parametrize("header,expected", [
+        (b"fLaC\x00\x00\x00\x22", "flac"),
+        (b"ID3\x04\x00\x00\x00\x00", "mp3"),
+        (b"\xff\xfb\x90\x00", "mp3"),               # MPEG-1 Layer III frame
+        (b"\xff\xf1\x50\x80", "aac"),               # ADTS AAC (layer bits 00)
+        (b"OggS\x00\x02\x00\x00", "ogg"),
+        (b"RIFF\x24\x08\x00\x00WAVE", "wav"),
+        (b"\x00\x00\x00\x20ftypM4A ", "mp4"),
+    ])
+    def test_recognizes_audio_headers(self, tmp_path, header, expected):
+        p = tmp_path / "f.bin"
+        p.write_bytes(header + b"\x00" * 64)
+        assert _sniff_audio_format(p) == expected
+
+    @pytest.mark.parametrize("data", [
+        b"<!DOCTYPE html><html>error</html>",       # HTML error page
+        b"PK\x03\x04not really audio",              # zip archive
+        b"\x00\x00",                                 # too short
+    ])
+    def test_rejects_non_audio(self, tmp_path, data):
+        p = tmp_path / "f.bin"
+        p.write_bytes(data)
+        assert _sniff_audio_format(p) is None
+
+    def test_missing_file_returns_none(self, tmp_path):
+        assert _sniff_audio_format(tmp_path / "nope.mp3") is None
+
+
 # --- race_download ---
 
 import asyncio
@@ -220,10 +254,14 @@ def _downloader(transfers, download_dir):
     return dl
 
 
+# ID3v2 header followed by an MPEG frame sync — passes content verification.
+_MP3_HEADER = b"ID3\x04\x00\x00\x00\x00\x00\x00\xff\xfb\x90\x00"
+
+
 def _winner_transfer(tmp_path, name="src.mp3"):
     """A transfer that starts downloading then completes, with a real file."""
     src = tmp_path / name
-    src.write_bytes(b"x" * 1024)
+    src.write_bytes(_MP3_HEADER + b"\x00" * 1010)
     return _FakeTransfer([_S.DOWNLOADING, _S.COMPLETE], started=True,
                          local_path=str(src), filesize=1024)
 
