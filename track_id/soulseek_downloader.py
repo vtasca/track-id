@@ -30,6 +30,7 @@ _TERMINAL_STATES = {
 
 _MIN_FILE_BYTES = 500 * 1024       # 500 KB
 _MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
+_SPEED_REFERENCE_BPS = 1_000_000   # 1 MB/s — avg_speed at/above this scores 1.0
 
 
 class DownloadError(Exception):
@@ -62,10 +63,17 @@ def rank_results(
     """Score and sort candidates; highest score first.
 
     Scoring weights:
-      50% — filename similarity to 'artist - title'
-      25% — bitrate quality (320 kbps = 1.0, linear decay)
-      15% — format (.mp3 = 1.0, .flac = 0.6, other = 0.0)
-      10% — file size sanity (500 KB – 50 MB = 1.0)
+      40% — filename similarity to 'artist - title'
+      20% — bitrate quality (320 kbps = 1.0, linear decay)
+      12% — availability (peer has a free upload slot now)
+      12% — format (.mp3 = 1.0, .flac = 0.6, other = 0.0)
+       8% — peer average speed (1 MB/s = 1.0, linear decay)
+       8% — file size sanity (500 KB – 50 MB = 1.0)
+
+    Availability and speed matter because a Soulseek download isn't pulled from
+    a swarm — it comes from one peer who must grant an upload slot. A peer with
+    no free slots queues you (often for a long time), so a ready, fast peer is
+    worth far more than a marginally better-named file from a busy one.
     """
     target = f"{artist} - {title}".lower()
     scored = []
@@ -97,11 +105,24 @@ def rank_results(
         else:
             size_score = 0.0
 
+        # Availability — a free upload slot means we can start now instead of
+        # waiting in the peer's queue.
+        availability_score = 1.0 if r.has_free_slots else 0.0
+
+        # Peer average speed (bytes/sec), normalised to 0–1 against a 1 MB/s
+        # reference. avg_speed is the server-reported upload speed for the peer.
+        if r.avg_speed and r.avg_speed > 0:
+            speed_score = min(r.avg_speed / _SPEED_REFERENCE_BPS, 1.0)
+        else:
+            speed_score = 0.0
+
         r.score = (
-            0.50 * filename_score
-            + 0.25 * bitrate_score
-            + 0.15 * format_score
-            + 0.10 * size_score
+            0.40 * filename_score
+            + 0.20 * bitrate_score
+            + 0.12 * availability_score
+            + 0.12 * format_score
+            + 0.08 * speed_score
+            + 0.08 * size_score
         )
         scored.append(r)
 
@@ -134,6 +155,10 @@ class SoulseekDownloader:
         self._client = SoulSeekClient(self._build_settings())
         await self._client.start()
         await self._client.login()
+        # Give the distributed network a moment to establish peer connections
+        # before issuing a search — searching immediately after login returns
+        # far fewer results than a fully-connected client.
+        await asyncio.sleep(10)
         return self
 
     async def __aexit__(self, *_) -> None:
