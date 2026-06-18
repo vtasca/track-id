@@ -11,9 +11,6 @@ from .display import (
     display_error,
     display_file_info_table,
     display_metadata_table,
-    display_playlist_album_header,
-    display_playlist_summary,
-    display_playlist_track,
     display_search_results,
     display_slsk_candidates,
     display_unified_enrichment_results,
@@ -143,52 +140,6 @@ def download(
             display_unified_enrichment_results(result)
         except Exception as e:
             console.print(f"[yellow]Warning: enrichment failed: {e}[/yellow]")
-
-
-@app.command(name="download-playlist")
-def download_playlist(
-    url: str = typer.Argument(..., help="YouTube playlist URL of albums to download"),
-    output_dir: Path = typer.Option(Path("downloads"), "--output-dir", "-o", help="Directory to save downloaded albums"),
-    min_bitrate: int = typer.Option(192, "--min-bitrate", help="Minimum acceptable bitrate in kbps"),
-    search_timeout: float = typer.Option(10.0, "--timeout", "-T", help="Seconds to wait for each Soulseek search"),
-    max_attempts: int = typer.Option(5, "--attempts", help="Maximum download attempts per track"),
-    username: Optional[str] = typer.Option(None, "--username", "-u", envvar="SOULSEEK_USERNAME", help="Soulseek username", show_default=False),
-    password: Optional[str] = typer.Option(None, "--password", "-p", envvar="SOULSEEK_PASSWORD", help="Soulseek password", show_default=False),
-) -> None:
-    """Download every album in a YouTube playlist from Soulseek, track by track"""
-    from .config import load_soulseek_config
-    from .playlist_downloader import download_playlist_async
-
-    try:
-        config = load_soulseek_config(username, password)
-    except ValueError as e:
-        display_error(str(e))
-        raise typer.Exit(1)
-
-    output_dir = output_dir.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    console.print(f"[cyan]Reading playlist:[/cyan] {url}")
-
-    try:
-        results = asyncio.run(
-            download_playlist_async(
-                url=url,
-                config=config,
-                output_dir=output_dir,
-                min_bitrate=min_bitrate,
-                search_timeout=search_timeout,
-                max_attempts=max_attempts,
-                on_album_start=display_playlist_album_header,
-                on_track_done=display_playlist_track,
-            )
-        )
-    except ValueError as e:
-        display_error(str(e))
-        raise typer.Exit(1)
-
-    console.print()
-    display_playlist_summary(results)
 
 
 def _strip_existing_tags(path: Path) -> None:
