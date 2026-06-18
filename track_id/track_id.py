@@ -6,15 +6,24 @@ from typing import NoReturn, Optional
 import typer
 
 from .display import (
+    DL_MUTED,
+    collecting_text,
+    connecting_text,
     console,
+    display_collected,
     display_download_complete,
     display_error,
     display_file_info_table,
+    display_log_path,
     display_metadata_table,
+    display_racing,
+    display_request,
+    display_search_header,
     display_search_results,
     display_slsk_candidates,
     display_unified_enrichment_results,
     display_unified_search_results,
+    make_download_progress,
 )
 from .mp3_utils import MP3File
 from .unified_api import enrich as unified_enrich
@@ -108,7 +117,7 @@ def download(
     from .soulseek_downloader import DownloadError, SoulseekDownloader
 
     log_file = configure_logging()
-    console.print(f"[dim]Logging diagnostics to {log_file}[/dim]")
+    display_log_path(log_file)
 
     try:
         config = load_soulseek_config(username, password)
@@ -169,19 +178,19 @@ async def _download_async(
     dest = output_dir / f"{_sanitize_filename(search_text)}.mp3"
 
     async with SoulseekDownloader(config, output_dir) as dl:
-        with console.status("Connecting to Soulseek network..."):
+        with console.status(connecting_text(), spinner="dots", spinner_style=DL_MUTED):
             await dl.connect()
 
-        console.print(
-            f"[cyan]Searching Soulseek for:[/cyan] [bold]{search_text}[/bold]  "
-            f"[dim]({search_timeout:.0f}s timeout)[/dim]"
-        )
-        with console.status("Collecting results...") as status:
+        display_search_header(search_text, search_timeout)
+
+        last_progress = {"files": 0, "peers": 0}
+        with console.status(
+            collecting_text(0, 0), spinner="dots", spinner_style=DL_MUTED
+        ) as status:
             def on_search_progress(file_count: int, peer_count: int) -> None:
-                status.update(
-                    f"Collecting results... [bold]{file_count}[/bold] file(s) from "
-                    f"[bold]{peer_count}[/bold] peer(s)"
-                )
+                last_progress["files"] = file_count
+                last_progress["peers"] = peer_count
+                status.update(collecting_text(file_count, peer_count))
 
             candidates = await dl.search(
                 search_text,
@@ -193,31 +202,28 @@ async def _download_async(
         if not candidates:
             raise ValueError(f"No results found on Soulseek for '{search_text}'")
 
+        display_collected(last_progress["files"], last_progress["peers"])
         display_slsk_candidates(candidates)
 
-        from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeRemainingColumn, TransferSpeedColumn
-
         racers = candidates[:max_attempts]
-        console.print(
-            f"[cyan]Racing top {len(racers)} candidate(s) for an upload slot...[/cyan]"
-        )
+        display_racing(len(racers))
 
         def on_attempt(c: "SlskResult") -> None:  # type: ignore[name-defined]
-            console.print(f"  [dim]Requesting from [yellow]{c.username}[/yellow]: {c.display_name}[/dim]")
+            display_request(c.username)
 
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            task_id = progress.add_task("Waiting for a slot...", total=None, start=False)
+        with make_download_progress() as progress:
+            task_id = progress.add_task(
+                "waiting for a slot", user="", total=None, start=False
+            )
 
             def on_start(c: "SlskResult") -> None:  # type: ignore[name-defined]
-                progress.update(task_id, description=f"Downloading from {c.username}", total=c.file_size or None)
+                console.print()  # separate the racing block from the download bar
+                progress.update(
+                    task_id,
+                    description="downloading from",
+                    user=c.username,
+                    total=c.file_size or None,
+                )
                 progress.start_task(task_id)
 
             def on_progress(bytes_done: int, total: Optional[int]) -> None:
