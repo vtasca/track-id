@@ -94,6 +94,32 @@ class TestRankResults:
         ranked = rank_results([r], "artist", "title")
         assert ranked[0].score > 0.4  # good match despite case difference
 
+    def test_prefers_peer_with_free_slot(self):
+        free = _make_result(has_free_slots=True)
+        busy = _make_result(username="peer2", has_free_slots=False)
+        # Identical otherwise — a free upload slot is the tiebreaker
+        ranked = rank_results([busy, free], "Artist", "Title")
+        assert ranked[0] is free
+
+    def test_prefers_faster_peer(self):
+        fast = _make_result(avg_speed=2_000_000)   # 2 MB/s, caps at 1.0
+        slow = _make_result(username="peer2", avg_speed=10_000)
+        ranked = rank_results([slow, fast], "Artist", "Title")
+        assert ranked[0] is fast
+
+    def test_free_slot_outweighs_minor_bitrate_edge(self):
+        # A ready peer at 256 kbps should beat a busy peer at 320 kbps:
+        # availability (0.12) dominates the small bitrate gap (0.20 * 0.2).
+        ready = _make_result(bitrate=256, has_free_slots=True)
+        busy = _make_result(username="peer2", bitrate=320, has_free_slots=False)
+        ranked = rank_results([busy, ready], "Artist", "Title")
+        assert ranked[0] is ready
+
+    def test_zero_speed_does_not_crash(self):
+        r = _make_result(avg_speed=0)
+        ranked = rank_results([r], "Artist", "Title")
+        assert 0.0 <= ranked[0].score <= 1.0
+
 
 # --- _sanitize_filename ---
 
