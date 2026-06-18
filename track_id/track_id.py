@@ -104,7 +104,11 @@ def download(
 ) -> None:
     """Download a track from Soulseek and optionally enrich it with metadata"""
     from .config import load_soulseek_config
+    from .logging_setup import configure_logging
     from .soulseek_downloader import DownloadError, SoulseekDownloader
+
+    log_file = configure_logging()
+    console.print(f"[dim]Logging diagnostics to {log_file}[/dim]")
 
     try:
         config = load_soulseek_config(username, password)

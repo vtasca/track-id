@@ -10,8 +10,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# aioslsk is chatty about normal P2P connection failures; suppress below WARNING
-logging.getLogger("aioslsk").setLevel(logging.WARNING)
 from typing import Callable, List, Optional
 
 from aioslsk.client import SoulSeekClient
@@ -20,6 +18,8 @@ from aioslsk.settings import CredentialsSettings, Settings, SharesSettings
 from aioslsk.transfer.model import Transfer, TransferState
 
 from .config import SoulseekConfig
+
+logger = logging.getLogger(__name__)
 
 _TERMINAL_STATES = {
     TransferState.State.COMPLETE,
@@ -178,6 +178,7 @@ class SoulseekDownloader:
         """Search the network and return ranked, filtered results."""
         assert self._client is not None, "Must be used as async context manager"
 
+        logger.info("Searching Soulseek for %r (timeout=%.0fs, min_bitrate=%d)", query, timeout, min_bitrate)
         request = await self._client.searches.search(query)
         await asyncio.sleep(timeout)
 
@@ -211,7 +212,9 @@ class SoulseekDownloader:
                 )
 
         artist, _, title = query.partition(" - ")
-        return rank_results(candidates, artist.strip(), title.strip() or query)
+        ranked = rank_results(candidates, artist.strip(), title.strip() or query)
+        logger.info("Search %r returned %d usable candidate(s)", query, len(ranked))
+        return ranked
 
     async def download_file(
         self,
@@ -223,6 +226,7 @@ class SoulseekDownloader:
         """Download one file from a candidate result and move it to dest."""
         assert self._client is not None, "Must be used as async context manager"
 
+        logger.info("Requesting %s from %s", candidate.display_name, candidate.username)
         transfer = await self._client.transfers.download(
             username=candidate.username,
             filename=candidate.remote_path,
@@ -232,10 +236,12 @@ class SoulseekDownloader:
 
         if not success:
             reason = transfer.fail_reason or transfer.abort_reason or "unknown"
+            logger.warning("Download from %s failed: %s", candidate.username, reason)
             raise DownloadError(
                 f"Download from {candidate.username} failed: {reason}"
             )
 
+        logger.info("Download from %s succeeded -> %s", candidate.username, dest)
         return self._finalize_transfer(transfer, dest)
 
     async def race_download(
