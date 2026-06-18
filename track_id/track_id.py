@@ -169,12 +169,26 @@ async def _download_async(
     dest = output_dir / f"{_sanitize_filename(search_text)}.mp3"
 
     async with SoulseekDownloader(config, output_dir) as dl:
+        with console.status("Connecting to Soulseek network..."):
+            await dl.connect()
+
         console.print(
             f"[cyan]Searching Soulseek for:[/cyan] [bold]{search_text}[/bold]  "
             f"[dim]({search_timeout:.0f}s timeout)[/dim]"
         )
-        with console.status("Collecting results..."):
-            candidates = await dl.search(search_text, timeout=search_timeout, min_bitrate=min_bitrate)
+        with console.status("Collecting results...") as status:
+            def on_search_progress(file_count: int, peer_count: int) -> None:
+                status.update(
+                    f"Collecting results... [bold]{file_count}[/bold] file(s) from "
+                    f"[bold]{peer_count}[/bold] peer(s)"
+                )
+
+            candidates = await dl.search(
+                search_text,
+                timeout=search_timeout,
+                min_bitrate=min_bitrate,
+                on_progress=on_search_progress,
+            )
 
         if not candidates:
             raise ValueError(f"No results found on Soulseek for '{search_text}'")
