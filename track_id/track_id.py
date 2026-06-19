@@ -23,7 +23,9 @@ from .display import (
     display_slsk_candidates,
     display_unified_enrichment_results,
     display_unified_search_results,
+    display_warning,
     make_download_progress,
+    section,
 )
 from .mp3_utils import MP3File
 from .unified_api import enrich as unified_enrich
@@ -146,13 +148,13 @@ def download(
     display_download_complete(dest)
 
     if enrich_after:
-        console.print("[cyan]Running metadata enrichment...[/cyan]")
+        section("enriching", str(dest))
         try:
             _strip_existing_tags(dest)
             result = unified_enrich(str(dest))
             display_unified_enrichment_results(result)
         except Exception as e:
-            console.print(f"[yellow]Warning: enrichment failed: {e}[/yellow]")
+            display_warning(f"enrichment failed: {e}")
 
 
 def _strip_existing_tags(path: Path) -> None:
