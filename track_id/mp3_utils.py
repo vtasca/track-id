@@ -211,6 +211,9 @@ MAX_ARTWORK_SIZE = 10 * 1024 * 1024  # 10 MB
 
 def download_artwork(url: str) -> Optional[bytes]:
     """Download artwork from a URL and return the image data as bytes"""
+    # Imported lazily: display -> data_sources -> mp3_utils would otherwise cycle.
+    from .display import display_warning
+
     try:
         headers = {
             "User-Agent": (
@@ -225,7 +228,7 @@ def download_artwork(url: str) -> Optional[bytes]:
 
         content_length = response.headers.get('Content-Length')
         if content_length and int(content_length) > MAX_ARTWORK_SIZE:
-            print(f"Warning: Artwork at {url} exceeds size limit, skipping")
+            display_warning(f"artwork at {url} exceeds size limit, skipping")
             return None
 
         chunks = []
@@ -233,13 +236,13 @@ def download_artwork(url: str) -> Optional[bytes]:
         for chunk in response.iter_content(chunk_size=8192):
             downloaded += len(chunk)
             if downloaded > MAX_ARTWORK_SIZE:
-                print(f"Warning: Artwork at {url} exceeds size limit, skipping")
+                display_warning(f"artwork at {url} exceeds size limit, skipping")
                 return None
             chunks.append(chunk)
 
         return b''.join(chunks)
     except Exception as e:
-        print(f"Warning: Could not download artwork from {url}: {e}")
+        display_warning(f"could not download artwork from {url}: {e}")
         return None
 
 def get_mime_type(url: str, content: bytes) -> str:

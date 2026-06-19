@@ -85,7 +85,7 @@ class TestIntegration:
             result = runner.invoke(app, ["search", "invalid search"])
             
             assert result.exit_code == 1
-            assert "Error:" in result.output
+            assert "Internal Server Error" in result.output
         
         # Test with invalid file
         result = runner.invoke(app, ["info", "nonexistent.mp3"])

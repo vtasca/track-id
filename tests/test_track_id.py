@@ -67,7 +67,7 @@ class TestTrackIdCLI:
         result = runner.invoke(app, ["search", "test track"])
         
         assert result.exit_code == 1
-        assert "Error:" in result.output
+        assert "API Error" in result.output
     
     def test_info_command_file_not_exists(self, runner):
         """Test info command with non-existent file"""
@@ -136,7 +136,7 @@ class TestTrackIdCLI:
         result = runner.invoke(app, ["info", "test.mp3"])
         
         assert result.exit_code == 0
-        assert "No metadata tags found" in result.output
+        assert "no metadata tags found" in result.output
     
     @patch('track_id.track_id.unified_enrich')
     @patch('track_id.track_id.MP3File')
@@ -214,9 +214,9 @@ class TestTrackIdCLI:
         result = runner.invoke(app, ["enrich", "test.mp3"])
         
         assert result.exit_code == 0
-        assert "Successfully enriched" in result.output
+        assert "enriched" in result.output
         assert "Test Artist - Test Title" in result.output
-        assert "New Metadata Added" in result.output
+        assert "new metadata" in result.output.lower()
         assert "Test Album" in result.output
         assert "Added album artwork" in result.output
     
@@ -315,7 +315,7 @@ class TestTrackIdCLI:
         result = runner.invoke(app, ["enrich", "test.mp3"])
         
         assert result.exit_code == 0
-        assert "Successfully enriched" in result.output
+        assert "enriched" in result.output
         assert "Added album artwork" in result.output
         assert "image/jpeg" in result.output
         
