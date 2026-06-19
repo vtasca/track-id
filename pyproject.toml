@@ -1,6 +1,6 @@
 [project]
 name = "track-id"
-version = "0.2.0"
+version = "0.3.0"
 description = "CLI for downloading, searching, and enriching MP3 metadata via Soulseek, Bandcamp, MusicBrainz, and Discogs"
 readme = "README.md"
 requires-python = ">=3.9"
