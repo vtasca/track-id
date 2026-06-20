@@ -2,9 +2,8 @@
 
 import difflib
 import requests
-import time
 from typing import Dict, List, Optional, Any
-from .data_sources import DataSource
+from .data_sources import DataSource, RateLimiter
 
 DISCOGS_API_BASE = "https://api.discogs.com"
 USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
@@ -20,9 +19,12 @@ class DiscogsDataSource(DataSource):
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
         })
+        # Stay within the 25 req/min unauthenticated limit; the limiter only
+        # waits for the time remaining since this source's previous call.
+        self._rate_limiter = RateLimiter(1.5)
 
     def _get(self, url: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        time.sleep(1.5)  # Stay within 25 req/min unauthenticated limit
+        self._rate_limiter.wait()
         response = self._session.get(url, params=params)
         if response.status_code == 200:
             return response.json()
