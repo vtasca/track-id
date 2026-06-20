@@ -77,15 +77,21 @@ class DataSource(ABC):
         
         # Extract metadata from the data source
         source_metadata = self.extract_metadata(detailed_track)
-        
+
+        # Snapshot the metadata that already existed on the file *before* updating.
+        # update_metadata() invalidates the cache, so reading mp3_file.metadata
+        # afterwards would return the post-update state (including the fields we
+        # just added) and make "existing metadata" duplicate "new metadata".
+        existing_metadata = dict(mp3_file.metadata)
+
         # Update MP3 file with new metadata
         added_metadata = mp3_file.update_metadata(source_metadata)
-        
+
         return {
             'file_path': file_path,
             'search_query': search_text,
             f'{self.name.lower()}_track': detailed_track,
-            'existing_metadata': mp3_file.metadata,
+            'existing_metadata': existing_metadata,
             f'{self.name.lower()}_metadata': source_metadata,
             'added_metadata': added_metadata
         }
