@@ -1,8 +1,7 @@
 import requests
-import time
 from typing import Dict, List, Optional, Any, Tuple, Union
 from .mp3_utils import MP3File
-from .data_sources import DataSource, extract_artist_name_from_credits
+from .data_sources import DataSource, RateLimiter, extract_artist_name_from_credits
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_BASE = "https://musicbrainz.org/ws/2"
@@ -11,9 +10,12 @@ USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
 
 class MusicBrainzDataSource(DataSource):
     """MusicBrainz data source implementation."""
-    
+
     def __init__(self):
         super().__init__("MusicBrainz")
+        # MusicBrainz allows max 1 request per second; the limiter only waits
+        # for the time remaining since this source's previous call.
+        self._rate_limiter = RateLimiter(1.0)
     
     def search(self, search_text: str, entity_type: str = "recording") -> Dict[str, Any]:
         """Search for tracks on MusicBrainz and return the raw API response"""
@@ -30,8 +32,8 @@ class MusicBrainzDataSource(DataSource):
         }
 
         # Rate limiting: MusicBrainz requires max 1 request per second
-        time.sleep(1)
-        
+        self._rate_limiter.wait()
+
         response = requests.get(
             f'{MUSICBRAINZ_API_BASE}/{entity_type}',
             headers=headers,
@@ -60,8 +62,8 @@ class MusicBrainzDataSource(DataSource):
         }
 
         # Rate limiting: MusicBrainz requires max 1 request per second
-        time.sleep(1)
-        
+        self._rate_limiter.wait()
+
         response = requests.get(
             f'{MUSICBRAINZ_API_BASE}/recording/{recording_id}',
             headers=headers,

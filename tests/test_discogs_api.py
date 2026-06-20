@@ -45,7 +45,7 @@ def source():
 
 
 class TestDiscogsSearch:
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_search_uses_freetext_query(self, mock_sleep, source):
         with patch.object(source._session, "get") as mock_get:
             mock_response = Mock()
@@ -60,7 +60,7 @@ class TestDiscogsSearch:
         assert params["q"] == "DJ Krush Ha Doh"
         assert params["type"] == "release"
 
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_search_handles_multilingual_title(self, mock_sleep, source):
         """Titles with embedded ' - ' (multilingual) must not break the query."""
         with patch.object(source._session, "get") as mock_get:
@@ -74,7 +74,7 @@ class TestDiscogsSearch:
         params = mock_get.call_args[1]["params"]
         assert params["q"] == "DJ Krush 黒い雨 Kuroi Ame Black Rain"
 
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_search_api_error_raises(self, mock_sleep, source):
         with patch.object(source._session, "get") as mock_get:
             mock_response = Mock()
@@ -171,7 +171,7 @@ class TestFindTrackInTracklist:
 
 
 class TestGetDetailedTrackInfo:
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_fetches_master_when_master_id_present(self, mock_sleep, source):
         stub = {**SAMPLE_SEARCH_RESULTS["results"][0], "_search_title": "Ha Doh", "_search_artist": "DJ Krush"}
         with patch.object(source, "_fetch_master", return_value=SAMPLE_MASTER) as mock_master:
@@ -180,7 +180,7 @@ class TestGetDetailedTrackInfo:
         mock_master.assert_called_once_with(45058)
         assert detail["_source"] == "master"
 
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_falls_back_to_release_when_no_master_id(self, mock_sleep, source):
         stub = {"id": 86771, "_search_title": "Ha Doh", "_search_artist": "DJ Krush"}
         sample_release = {**SAMPLE_MASTER, "labels": [{"name": "Instinct Records"}]}
@@ -190,7 +190,7 @@ class TestGetDetailedTrackInfo:
         mock_release.assert_called_once_with(86771)
         assert detail["_source"] == "release"
 
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_injects_track_number_and_total(self, mock_sleep, source):
         stub = {**SAMPLE_SEARCH_RESULTS["results"][0], "_search_title": "Ha Doh", "_search_artist": "DJ Krush"}
         with patch.object(source, "_fetch_master", return_value=SAMPLE_MASTER):
@@ -202,7 +202,7 @@ class TestGetDetailedTrackInfo:
         assert matched["_track_number"] == 4
         assert matched["_track_total"] == 5
 
-    @patch("track_id.discogs_api.time.sleep")
+    @patch("track_id.data_sources.time.sleep")
     def test_matched_track_is_none_when_not_found(self, mock_sleep, source):
         stub = {**SAMPLE_SEARCH_RESULTS["results"][0], "_search_title": "Nonexistent", "_search_artist": "DJ Krush"}
         with patch.object(source, "_fetch_master", return_value=SAMPLE_MASTER):
