@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 
 from track_id.data_sources import (
+    DataSource,
     DataSourceRegistry,
     search_all_sources,
     enrich_with_all_sources,
@@ -287,6 +288,56 @@ class TestEnrichWithAllSources:
         result = enrich_with_all_sources("my_track.mp3")
 
         assert result["file_path"] == "my_track.mp3"
+
+
+class _FakeMP3File:
+    """Mimics MP3File's cache-invalidation: after update_metadata, `metadata`
+    reflects the post-update state (the newly added fields are now on the file)."""
+
+    def __init__(self, existing):
+        self.metadata = dict(existing)
+        self.parsed_filename = ("", "")
+
+    def update_metadata(self, new_metadata):
+        added = {k: v for k, v in new_metadata.items()
+                 if k != "artwork_url" and not self.metadata.get(k)}
+        # Simulate reading fresh tags back from disk after saving.
+        self.metadata = {**self.metadata, **added}
+        return added
+
+
+class _FakeSource(DataSource):
+    def __init__(self, source_metadata):
+        super().__init__("Fake")
+        self._source_metadata = source_metadata
+
+    def search(self, search_text):
+        return {}
+
+    def find_matching_track(self, search_results, artist, title):
+        return {"id": "1"}
+
+    def extract_metadata(self, track_data):
+        return self._source_metadata
+
+
+class TestEnrichExistingMetadataSnapshot:
+    @patch("track_id.data_sources.MP3File")
+    def test_existing_metadata_excludes_newly_added_fields(self, mock_mp3_class):
+        # File already has artist + title; enrichment adds album + year.
+        existing = {"TPE1": "Test Artist", "TIT2": "Test Track"}
+        fake_mp3 = _FakeMP3File(existing)
+        mock_mp3_class.return_value = fake_mp3
+
+        source = _FakeSource({"TALB": "New Album", "TDRC": "2024"})
+        result = source.enrich_mp3_file("track.mp3")
+
+        # existing_metadata is the pre-update snapshot, not the post-update file.
+        assert result["existing_metadata"] == {"TPE1": "Test Artist", "TIT2": "Test Track"}
+        assert result["added_metadata"] == {"TALB": "New Album", "TDRC": "2024"}
+        # The added fields must not leak into existing_metadata.
+        assert "TALB" not in result["existing_metadata"]
+        assert "TDRC" not in result["existing_metadata"]
 
 
 class TestExtractArtistNameFromCredits:
