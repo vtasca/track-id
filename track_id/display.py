@@ -1,6 +1,7 @@
 """Display utilities for Rich console output formatting."""
 
-from typing import Dict, Any, List, Optional, Iterable, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
+
 from rich import box
 from rich.console import Console
 from rich.json import JSON
@@ -14,8 +15,9 @@ from rich.progress import (
 )
 from rich.table import Table
 from rich.text import Text
-from .id3_tags import ID3_TAG_NAMES
+
 from .data_sources import extract_artist_name_from_credits
+from .id3_tags import ID3_TAG_NAMES
 
 console = Console()
 

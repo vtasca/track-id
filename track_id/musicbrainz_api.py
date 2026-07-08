@@ -1,5 +1,5 @@
-from typing import Dict, List, Optional, Any, Tuple, Union
-from .mp3_utils import MP3File
+from typing import Any, Dict, List, Optional, Union
+
 from .data_sources import (
     DEFAULT_HTTP_TIMEOUT,
     USER_AGENT,

@@ -1,7 +1,8 @@
 """Discogs data source for music metadata enrichment."""
 
 import difflib
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from .data_sources import (
     DEFAULT_HTTP_TIMEOUT,
     USER_AGENT,

@@ -1,11 +1,11 @@
-import pytest
 from unittest.mock import Mock, patch
+
+from track_id.bandcamp_api import BandcampDataSource
 from track_id.mp3_utils import (
+    MAX_ARTWORK_SIZE,
     download_artwork,
     get_mime_type,
-    MAX_ARTWORK_SIZE,
 )
-from track_id.bandcamp_api import BandcampDataSource
 
 
 def _make_streaming_response(chunks, content_length=None):

@@ -1,8 +1,8 @@
+from unittest.mock import Mock, patch
+
 import pytest
-import os
-import tempfile
-from unittest.mock import patch, Mock
 from typer.testing import CliRunner
+
 from track_id import app
 
 

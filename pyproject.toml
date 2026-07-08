@@ -27,6 +27,8 @@ classifiers = [
 dependencies = [
     "requests>=2.32.4",
     "typer>=0.16.0",
+    # urllib3 v2 requires OpenSSL 1.1.1+ and fails to import on macOS system
+    # Python 3.9, which links LibreSSL. Revisit when dropping 3.9 support.
     "urllib3<2.0.0",
     "mutagen>=1.47.0",
     "rich>=13.0.0",
@@ -55,12 +57,26 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "mypy>=1.17.1",
+    "ruff>=0.5.0",
     "types-requests>=2.31.0.6",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-v"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+# Defaults (pyflakes + core pycodestyle errors) plus import sorting and bugbear.
+# E501 (line length) is left off to avoid churn in Typer option declarations.
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer's idiom is calls in argument defaults.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
 
 [tool.mypy]
 python_version = "3.9"

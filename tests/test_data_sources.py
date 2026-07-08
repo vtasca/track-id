@@ -1,14 +1,15 @@
 """Tests for data_sources.py core aggregation logic."""
 
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 from track_id.data_sources import (
     DataSource,
     DataSourceRegistry,
-    search_all_sources,
     enrich_with_all_sources,
     extract_artist_name_from_credits,
+    search_all_sources,
 )
 
 

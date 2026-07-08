@@ -1,9 +1,8 @@
-import pytest
-import os
-import tempfile
 from unittest.mock import Mock, patch
+
+import pytest
 from typer.testing import CliRunner
-from track_id import app
+
 from track_id.bandcamp_api import BandcampDataSource
 
 

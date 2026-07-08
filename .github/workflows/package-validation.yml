@@ -9,20 +9,27 @@ on:
 jobs:
   validate-package:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Oldest and newest supported Python versions
+        python-version: ["3.9", "3.13"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --dev
+
+      - name: Lint
+        run: uv run ruff check track_id/ tests/
+
+      - name: Type check
+        run: uv run mypy track_id/
 
       - name: Run tests
         run: uv run pytest

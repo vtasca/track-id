@@ -1,6 +1,5 @@
 """Edge-case tests for MP3File._parse_artist_title_from_filename()."""
 
-import pytest
 from track_id.mp3_utils import MP3File
 
 

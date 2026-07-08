@@ -1,10 +1,11 @@
 """Unified API functions that work with all available data sources."""
 
-from typing import Dict, Any
-from .data_sources import data_source_registry, search_all_sources, enrich_with_all_sources
+from typing import Any, Dict
+
 from .bandcamp_api import BandcampDataSource
-from .musicbrainz_api import MusicBrainzDataSource
+from .data_sources import data_source_registry, enrich_with_all_sources, search_all_sources
 from .discogs_api import DiscogsDataSource
+from .musicbrainz_api import MusicBrainzDataSource
 
 
 def initialize_data_sources() -> None:

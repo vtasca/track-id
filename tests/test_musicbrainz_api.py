@@ -1,10 +1,11 @@
-import pytest
 import os
 import tempfile
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, patch
+
+import pytest
 from mutagen.id3 import ID3
 from typer.testing import CliRunner
-from track_id import app
+
 from track_id.mp3_utils import MP3File
 from track_id.musicbrainz_api import MusicBrainzDataSource
 

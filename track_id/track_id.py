@@ -1,9 +1,13 @@
 import asyncio
 import importlib.metadata
 from pathlib import Path
-from typing import NoReturn, Optional
+from typing import TYPE_CHECKING, Optional
 
 import typer
+
+if TYPE_CHECKING:
+    from .config import SoulseekConfig
+    from .soulseek_downloader import SlskResult
 
 from .display import (
     DL_MUTED,
@@ -19,7 +23,6 @@ from .display import (
     display_racing,
     display_request,
     display_search_header,
-    display_search_results,
     display_slsk_candidates,
     display_unified_enrichment_results,
     display_unified_search_results,
@@ -30,6 +33,7 @@ from .display import (
 from .mp3_utils import MP3File
 from .unified_api import enrich as unified_enrich
 from .unified_api import search as unified_search
+
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""
@@ -74,7 +78,7 @@ def search(
         display_unified_search_results(results, top_n=top)
     except Exception as e:
         display_error(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 @app.command()
 def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> None:
@@ -90,7 +94,7 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> N
             
     except Exception as e:
         display_error(f"Error reading MP3 file: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 @app.command()
 def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")) -> None:
@@ -100,7 +104,7 @@ def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to en
         display_unified_enrichment_results(result)
     except Exception as e:
         display_error(f"Error enriching MP3 file: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 @app.command()
 def download(
@@ -116,7 +120,7 @@ def download(
     """Download a track from Soulseek and optionally enrich it with metadata"""
     from .config import load_soulseek_config
     from .logging_setup import configure_logging
-    from .soulseek_downloader import DownloadError, SoulseekDownloader
+    from .soulseek_downloader import DownloadError
 
     log_file = configure_logging()
     display_log_path(log_file)
@@ -125,7 +129,7 @@ def download(
         config = load_soulseek_config(username, password)
     except ValueError as e:
         display_error(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     output_dir = output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +147,7 @@ def download(
         )
     except (DownloadError, ValueError) as e:
         display_error(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     display_download_complete(dest)
 
@@ -168,7 +172,7 @@ def _strip_existing_tags(path: Path) -> None:
 
 async def _download_async(
     search_text: str,
-    config: "SoulseekConfig",  # type: ignore[name-defined]
+    config: "SoulseekConfig",
     output_dir: Path,
     min_bitrate: int,
     search_timeout: float,
@@ -210,7 +214,7 @@ async def _download_async(
         racers = candidates[:max_attempts]
         display_racing(len(racers))
 
-        def on_attempt(c: "SlskResult") -> None:  # type: ignore[name-defined]
+        def on_attempt(c: "SlskResult") -> None:
             display_request(c.username)
 
         with make_download_progress() as progress:
@@ -218,7 +222,7 @@ async def _download_async(
                 "waiting for a slot", user="", total=None, start=False
             )
 
-            def on_start(c: "SlskResult") -> None:  # type: ignore[name-defined]
+            def on_start(c: "SlskResult") -> None:
                 console.print()  # separate the racing block from the download bar
                 progress.update(
                     task_id,

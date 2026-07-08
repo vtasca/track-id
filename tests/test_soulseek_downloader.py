@@ -1,11 +1,18 @@
 """Unit tests for Soulseek downloader ranking and filtering logic."""
 
+import asyncio
+
 import pytest
+from aioslsk.transfer.model import TransferState
+
+from track_id.config import SoulseekConfig
 from track_id.soulseek_downloader import (
+    DownloadError,
     SlskResult,
-    rank_results,
+    SoulseekDownloader,
     _sanitize_filename,
     _sniff_audio_format,
+    rank_results,
 )
 
 
@@ -192,13 +199,6 @@ class TestSniffAudioFormat:
 
 
 # --- race_download ---
-
-import asyncio
-
-from aioslsk.transfer.model import TransferState
-
-from track_id.config import SoulseekConfig
-from track_id.soulseek_downloader import DownloadError, SoulseekDownloader
 
 _S = TransferState.State
 

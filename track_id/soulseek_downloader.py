@@ -10,7 +10,6 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-
 from typing import Callable, List, Optional
 
 from aioslsk.client import SoulSeekClient

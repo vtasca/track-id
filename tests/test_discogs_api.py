@@ -1,5 +1,7 @@
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from track_id.discogs_api import DiscogsDataSource
 
 SAMPLE_SEARCH_RESULTS = {
@@ -53,7 +55,7 @@ class TestDiscogsSearch:
             mock_response.json.return_value = SAMPLE_SEARCH_RESULTS
             mock_get.return_value = mock_response
 
-            result = source.search("DJ Krush - Ha Doh")
+            source.search("DJ Krush - Ha Doh")
 
         call_kwargs = mock_get.call_args
         params = call_kwargs[1]["params"] if "params" in call_kwargs[1] else call_kwargs[0][1]

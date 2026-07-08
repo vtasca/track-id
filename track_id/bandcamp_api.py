@@ -1,6 +1,6 @@
-from typing import Dict, List, Optional, Any, Tuple
-from .mp3_utils import MP3File
-from .data_sources import DataSource, DEFAULT_HTTP_TIMEOUT, make_retrying_session
+from typing import Any, Dict, Optional
+
+from .data_sources import DEFAULT_HTTP_TIMEOUT, DataSource, make_retrying_session
 
 
 class BandcampDataSource(DataSource):

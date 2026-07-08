@@ -1,10 +1,11 @@
-import requests
-from typing import Dict, List, Optional, Any, Tuple
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, ID3NoHeaderError, ID3TagError
-from mutagen.id3._frames import TIT2, TPE1, TPE2, TALB, TDRC, TCOM, TRCK, TCON, TPUB, TXXX, APIC
 import os
 import re
+from typing import Any, Dict, Optional, Tuple
+
+import requests
+from mutagen.id3 import ID3, ID3NoHeaderError, ID3TagError
+from mutagen.id3._frames import APIC, TALB, TCOM, TCON, TDRC, TIT2, TPE1, TPE2, TPUB, TRCK, TXXX
+from mutagen.mp3 import MP3
 
 
 class TagWriteError(Exception):

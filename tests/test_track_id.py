@@ -1,8 +1,10 @@
-import pytest
 import os
 import tempfile
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, patch
+
+import pytest
 from typer.testing import CliRunner
+
 from track_id import app
 
 
