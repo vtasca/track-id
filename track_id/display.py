@@ -640,3 +640,29 @@ def display_analysis_report(report: "FileReport", min_bitrate: int = 0) -> None:
         section("problems", mark=None)
         console.print(Text("  none", style=DL_FAINT))
     console.print()
+
+
+def display_doctor_report(directory: Any, results: List[Tuple["FileReport", List[str]]]) -> None:
+    """Directory health scan: per-file problem lines, then a summary."""
+    section("doctor", f"{directory}")
+
+    unhealthy = [(report, problems) for report, problems in results if problems]
+    for report, problems in unhealthy:
+        try:
+            shown = report.path.relative_to(directory)
+        except ValueError:
+            shown = report.path
+        section(str(shown), mark=None)
+        for problem in problems:
+            console.print(Text(f"  {_FAIL} {problem}", style=ERROR))
+
+    section("summary", mark=None)
+    line = Text()
+    line.append(f"  {len(results)} scanned", style=DL_TEXT)
+    line.append("  ·  ", style=DL_FAINT)
+    line.append(f"{len(results) - len(unhealthy)} healthy", style=DL_TEXT)
+    line.append("  ·  ", style=DL_FAINT)
+    style = ERROR if unhealthy else DL_TEXT
+    line.append(f"{len(unhealthy)} with problems", style=style)
+    console.print(line)
+    console.print()

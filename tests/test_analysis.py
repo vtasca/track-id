@@ -139,3 +139,58 @@ class TestAnalyzeCommand:
 
         assert result.exit_code == 1
         assert "does not exist" in result.output
+
+
+class TestDoctorCommand:
+    @pytest.fixture
+    def runner(self):
+        return CliRunner()
+
+    @pytest.fixture
+    def library(self, tmp_path):
+        """A directory with one clean, one under-tagged, and one fake file."""
+        clean = tmp_path / "clean.mp3"
+        clean.write_bytes(MP3_FRAME * 4)
+        MP3File(str(clean)).update_metadata(
+            {"TIT2": "Title", "TPE1": "Artist", "TALB": "Album", "TDRC": "2020"}
+        )
+        from mutagen.id3 import APIC, ID3
+        id3 = ID3(str(clean))
+        id3["APIC:"] = APIC(encoding=3, mime="image/jpeg", type=3, desc="", data=b"\xff\xd8\xff x")
+        id3.save(str(clean))
+
+        untagged = tmp_path / "untagged.mp3"
+        untagged.write_bytes(MP3_FRAME * 4)
+
+        fake = tmp_path / "fake.mp3"
+        fake.write_bytes(b"<html>nope</html>" * 10)
+        return tmp_path
+
+    def test_doctor_reports_problems_and_summary(self, runner, library):
+        result = runner.invoke(app, ["doctor", str(library), "--min-bitrate", "128"])
+
+        assert result.exit_code == 0
+        assert "untagged.mp3" in result.output
+        assert "missing tags" in result.output
+        assert "fake.mp3" in result.output
+        assert "not a recognized audio file" in result.output
+        assert "clean.mp3" not in result.output
+        assert "3 scanned" in result.output
+        assert "1 healthy" in result.output
+        assert "2 with problems" in result.output
+
+    def test_doctor_flags_low_bitrate(self, runner, library):
+        result = runner.invoke(app, ["doctor", str(library)])  # default 192 kbps
+
+        assert "128 kbps < 192 kbps" in result.output
+
+    def test_doctor_empty_directory(self, runner, tmp_path):
+        result = runner.invoke(app, ["doctor", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert "no .mp3 files found" in result.output
+
+    def test_doctor_rejects_non_directory(self, runner):
+        result = runner.invoke(app, ["doctor", "does/not/exist"])
+
+        assert result.exit_code == 1

@@ -157,6 +157,34 @@ def analyze(
 
 
 @app.command()
+def doctor(
+    directory: Path = typer.Argument(Path("."), help="Directory to scan (recursive)"),
+    min_bitrate: int = typer.Option(192, "--min-bitrate", help="Bitrate threshold (kbps) below which files are flagged"),
+) -> None:
+    """Scan a directory for unhealthy MP3s: fake audio files, low bitrate, missing tags or artwork"""
+    from .analysis import inspect_file, iter_audio_files
+    from .display import display_doctor_report
+
+    if not directory.is_dir():
+        display_error(f"'{directory}' is not a directory")
+        raise typer.Exit(1)
+
+    files = iter_audio_files(directory)
+    if not files:
+        display_warning(f"no .mp3 files found under {directory}")
+        return
+
+    results = []
+    with console.status(f"scanning 0/{len(files)}", spinner="dots", spinner_style=DL_MUTED) as status:
+        for i, path in enumerate(files, start=1):
+            status.update(f"scanning {i}/{len(files)}")
+            report = inspect_file(str(path))
+            results.append((report, report.problems(min_bitrate)))
+
+    display_doctor_report(directory, results)
+
+
+@app.command()
 def download(
     search_text: str = typer.Argument(..., help="Track to download, e.g. 'Artist - Title'"),
     output_dir: Path = typer.Option(Path("downloads"), "--output-dir", "-o", help="Directory to save the downloaded file"),
