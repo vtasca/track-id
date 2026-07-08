@@ -162,8 +162,8 @@ def _strip_existing_tags(path: Path) -> None:
     from mutagen.id3 import ID3, ID3NoHeaderError
     try:
         ID3(str(path)).delete()
-    except (ID3NoHeaderError, Exception):
-        pass
+    except ID3NoHeaderError:
+        pass  # no tags to strip; anything else propagates to the caller's warning
 
 
 async def _download_async(

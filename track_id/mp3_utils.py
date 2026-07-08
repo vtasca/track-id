@@ -7,6 +7,10 @@ import os
 import re
 
 
+class TagWriteError(Exception):
+    """Raised when ID3 tags cannot be written to an MP3 file."""
+
+
 class MP3File:
     """A class to represent and manage MP3 file information and metadata."""
     
@@ -120,9 +124,9 @@ class MP3File:
             
         Returns:
             Dictionary of metadata that was actually added
-            
+
         Raises:
-            Exception: If there's an error updating the metadata
+            TagWriteError: If there's an error updating the metadata
         """
         added_metadata = {}
         
@@ -196,7 +200,7 @@ class MP3File:
             return added_metadata
             
         except Exception as e:
-            raise Exception(f"Error updating MP3 metadata: {e}")
+            raise TagWriteError(f"Error updating MP3 metadata: {e}") from e
     
     def refresh_metadata(self):
         """Refresh the metadata cache by reloading from file."""
