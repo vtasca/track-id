@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .data_sources import (
     DEFAULT_HTTP_TIMEOUT,
@@ -57,7 +57,8 @@ class MusicBrainzDataSource(DataSource):
         """Look up detailed information about a specific recording"""
         
         if includes is None:
-            includes = ['artists', 'releases', 'tags']
+            # release-groups is needed to spot compilations when picking a release
+            includes = ['artists', 'releases', 'release-groups', 'tags']
         
         headers = {
             "User-Agent": USER_AGENT,
@@ -111,8 +112,7 @@ class MusicBrainzDataSource(DataSource):
         
         # Album/Release
         if 'releases' in recording_data and recording_data['releases']:
-            # Get the first release (usually the main one)
-            release = recording_data['releases'][0]
+            release = self._select_release(recording_data['releases'])
             if 'title' in release:
                 metadata['TALB'] = release['title']
 
@@ -131,15 +131,6 @@ class MusicBrainzDataSource(DataSource):
             if 'id' in release:
                 metadata['artwork_url'] = f"https://coverartarchive.org/release/{release['id']}/front"
         
-        # Composer (if available)
-        if 'artist-credit' in recording_data and recording_data['artist-credit']:
-            # For simplicity, use the first artist as composer
-            first_artist = recording_data['artist-credit'][0]
-            if isinstance(first_artist, dict) and 'name' in first_artist:
-                metadata['TCOM'] = first_artist['name']
-            elif isinstance(first_artist, str):
-                metadata['TCOM'] = first_artist
-        
         # Tags/Genres
         if 'tags' in recording_data and recording_data['tags']:
             # Get the most popular tags
@@ -149,6 +140,25 @@ class MusicBrainzDataSource(DataSource):
                 metadata['TXXX:GENRE'] = ', '.join(top_tags)
 
         return metadata
+
+    @staticmethod
+    def _select_release(releases: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Pick the release to source album/year/artwork from.
+
+        The API's ordering of a recording's releases is arbitrary, so taking
+        releases[0] often lands on a compilation or reissue. Prefer official
+        releases, then non-compilations, then the earliest date.
+        """
+        def sort_key(release: Dict[str, Any]) -> Tuple[int, int, str]:
+            status_rank = 0 if release.get('status') == 'Official' else 1
+            release_group = release.get('release-group') or {}
+            secondary_types = release_group.get('secondary-types') or []
+            compilation_rank = 1 if 'Compilation' in secondary_types else 0
+            # Missing/partial dates sort last; "YYYY" vs "YYYY-MM-DD" compares fine
+            date = release.get('date') or '9999'
+            return (status_rank, compilation_rank, date)
+
+        return min(releases, key=sort_key)
 
     def _build_search_query(self, artist: str, title: str) -> str:
         """Build MusicBrainz-specific search query."""

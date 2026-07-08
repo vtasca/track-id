@@ -146,10 +146,39 @@ class TestMusicBrainzAPI:
         assert metadata["TPE1"] == "Test Artist"
         assert metadata["TALB"] == "Test Album"
         assert metadata["TDRC"] == "2020"
-        assert metadata["TCOM"] == "Test Artist"
+        # Composer is intentionally not written: the performing artist is not the composer
+        assert "TCOM" not in metadata
         assert "rock" in metadata["TXXX:GENRE"]
         assert "alternative" in metadata["TXXX:GENRE"]
         assert metadata["artwork_url"] == "https://coverartarchive.org/release/release-abc-123/front"
+
+    def test_select_release_prefers_official_non_compilation_earliest(self):
+        """Release choice: official beats bootleg, album beats compilation, earlier beats later"""
+        releases = [
+            {"id": "bootleg", "status": "Bootleg", "date": "1990-01-01"},
+            {
+                "id": "compilation",
+                "status": "Official",
+                "date": "1991-01-01",
+                "release-group": {"secondary-types": ["Compilation"]},
+            },
+            {"id": "reissue", "status": "Official", "date": "2015-06-01"},
+            {"id": "original", "status": "Official", "date": "1992-11-09"},
+        ]
+
+        selected = MusicBrainzDataSource._select_release(releases)
+
+        assert selected["id"] == "original"
+
+    def test_select_release_missing_date_sorts_last(self):
+        releases = [
+            {"id": "undated", "status": "Official"},
+            {"id": "dated", "status": "Official", "date": "2001"},
+        ]
+
+        selected = MusicBrainzDataSource._select_release(releases)
+
+        assert selected["id"] == "dated"
 
     def test_extract_musicbrainz_metadata_no_artwork_without_release_id(self):
         """No artwork_url should be set when the release has no MusicBrainz ID"""
