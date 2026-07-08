@@ -61,3 +61,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-v"]
+
+[tool.mypy]
+python_version = "3.9"
+
+[[tool.mypy.overrides]]
+# aioslsk ships no type stubs; tomllib only exists on Python 3.11+ and is
+# imported behind a try/except ImportError in config.py.
+module = ["aioslsk.*", "tomllib"]
+ignore_missing_imports = true

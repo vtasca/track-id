@@ -404,6 +404,7 @@ class SoulseekDownloader:
         wins the race and begins downloading, `on_progress` during that download.
         """
         assert self._client is not None, "Must be used as async context manager"
+        client = self._client  # local binding so the closure below type-narrows
 
         pending = list(candidates)
         # Each entry: [transfer, candidate, requested_at]
@@ -414,7 +415,7 @@ class SoulseekDownloader:
                 cand = pending.pop(0)
                 if on_attempt:
                     on_attempt(cand)
-                transfer = await self._client.transfers.download(
+                transfer = await client.transfers.download(
                     username=cand.username,
                     filename=cand.remote_path,
                 )
