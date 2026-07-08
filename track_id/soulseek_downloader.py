@@ -17,6 +17,7 @@ from aioslsk.protocol.primitives import AttributeKey
 from aioslsk.settings import CredentialsSettings, Settings, SharesSettings
 from aioslsk.transfer.model import Transfer, TransferState
 
+from .analysis import FORMAT_ALIASES, sanitize_filename, sniff_audio_format
 from .config import SoulseekConfig
 
 logger = logging.getLogger(__name__)
@@ -133,56 +134,11 @@ def rank_results(
     return scored
 
 
-def _sanitize_filename(s: str) -> str:
-    return re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", s).strip()
-
-
-# Map a claimed extension to the set of container formats whose magic bytes
-# we accept for it. Several extensions share a container (m4a/aac/mp4) or are
-# routinely mislabeled between lossy/lossless siblings.
-_FORMAT_ALIASES = {
-    "mp3": {"mp3"},
-    "flac": {"flac"},
-    "ogg": {"ogg"},
-    "wav": {"wav"},
-    "m4a": {"mp4"},
-    "aac": {"mp4", "aac"},
-}
-
-
-def _sniff_audio_format(path: Path) -> Optional[str]:
-    """Identify a file's real container from its header bytes.
-
-    Returns a canonical format name (``mp3``, ``flac``, ``ogg``, ``wav``,
-    ``mp4``, ``aac``) or ``None`` if the bytes match no known audio format —
-    e.g. an HTML error page or truncated junk served under a music filename.
-    """
-    try:
-        with open(path, "rb") as fh:
-            head = fh.read(16)
-    except OSError:
-        return None
-
-    if len(head) < 4:
-        return None
-
-    if head[:4] == b"fLaC":
-        return "flac"
-    if head[:4] == b"OggS":
-        return "ogg"
-    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
-        return "wav"
-    if head[4:8] == b"ftyp":
-        return "mp4"
-    if head[:3] == b"ID3":
-        return "mp3"
-    # MPEG audio frame sync: 11 set bits (0xFFE).
-    if head[0] == 0xFF and (head[1] & 0xE0) == 0xE0:
-        # ADTS AAC streams share the sync word; layer bits 0b00 mark AAC.
-        if (head[1] & 0x06) == 0x00:
-            return "aac"
-        return "mp3"
-    return None
+# Filename/format utilities live in analysis.py (no aioslsk dependency);
+# re-bound here under their historical names for existing imports.
+_sanitize_filename = sanitize_filename
+_FORMAT_ALIASES = FORMAT_ALIASES
+_sniff_audio_format = sniff_audio_format
 
 
 class SoulseekDownloader:

@@ -1,6 +1,9 @@
 """Display utilities for Rich console output formatting."""
 
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .analysis import FileReport
 
 from rich import box
 from rich.console import Console
@@ -591,3 +594,49 @@ def display_error(message: str, prefix: str = "error") -> None:
     line.append(str(message), style=DL_TEXT)
     console.print()
     console.print(line)
+
+
+# ---------------------------------------------------------------------------
+# Analyze / doctor — file inspection reports.
+# ---------------------------------------------------------------------------
+
+def display_analysis_report(report: "FileReport", min_bitrate: int = 0) -> None:
+    """Full inspection report for one file: stream properties, tags, problems."""
+    section("analyze", str(report.path))
+
+    fmt = report.actual_format or "unrecognized"
+    if report.format_mismatch and report.actual_format:
+        fmt = f"{report.actual_format}  (extension says .{report.claimed_format})"
+
+    pairs = [
+        ("size", f"{report.file_size:,} bytes  ({report.file_size / 1024 / 1024:.2f} MB)"),
+        ("format", fmt),
+    ]
+    if report.readable:
+        minutes, seconds = divmod(int(report.duration_seconds), 60)
+        bitrate = f"{report.bitrate // 1000} kbps" if report.bitrate else "unknown"
+        if report.bitrate_mode != "unknown":
+            bitrate += f"  ({report.bitrate_mode})"
+        channels = {1: "mono", 2: "stereo"}.get(report.channels or 0, str(report.channels))
+        pairs += [
+            ("duration", f"{minutes}:{seconds:02d}"),
+            ("bitrate", bitrate),
+            ("sample rate", f"{report.sample_rate} Hz  {channels}" if report.sample_rate else "unknown"),
+        ]
+        if report.encoder:
+            pairs.append(("encoder", report.encoder))
+    _print_pairs(pairs)
+
+    display_metadata_table(report.tags)
+    if report.has_artwork:
+        console.print(Text("  + embedded artwork", style=DL_FAINT))
+
+    problems = report.problems(min_bitrate)
+    if problems:
+        section("problems", mark=None)
+        for problem in problems:
+            console.print(Text(f"  ✗ {problem}", style=ERROR))
+    else:
+        section("problems", mark=None)
+        console.print(Text("  none", style=DL_FAINT))
+    console.print()

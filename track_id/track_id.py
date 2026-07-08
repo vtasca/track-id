@@ -136,6 +136,27 @@ def enrich(
         raise typer.Exit(1) from None
 
 @app.command()
+def analyze(
+    file_path: str = typer.Argument(..., help="Path to the audio file to inspect"),
+    min_bitrate: int = typer.Option(192, "--min-bitrate", help="Bitrate threshold (kbps) used when flagging problems"),
+) -> None:
+    """Deep-inspect one file: real container format, stream properties, tag completeness"""
+    from .analysis import inspect_file
+    from .display import display_analysis_report
+
+    if not Path(file_path).is_file():
+        display_error(f"File '{file_path}' does not exist")
+        raise typer.Exit(1)
+
+    try:
+        report = inspect_file(file_path)
+        display_analysis_report(report, min_bitrate=min_bitrate)
+    except Exception as e:
+        display_error(f"Error analyzing file: {e}")
+        raise typer.Exit(1) from None
+
+
+@app.command()
 def download(
     search_text: str = typer.Argument(..., help="Track to download, e.g. 'Artist - Title'"),
     output_dir: Path = typer.Option(Path("downloads"), "--output-dir", "-o", help="Directory to save the downloaded file"),
