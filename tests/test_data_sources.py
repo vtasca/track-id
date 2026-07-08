@@ -9,6 +9,9 @@ from track_id.data_sources import (
     DataSourceRegistry,
     enrich_with_all_sources,
     extract_artist_name_from_credits,
+    find_best_match,
+    match_score,
+    normalize_for_match,
     search_all_sources,
 )
 
@@ -385,3 +388,52 @@ class TestExtractArtistNameFromCredits:
     def test_all_dicts_without_name_key(self):
         credits = [{"id": "123"}, {"url": "http://example.com"}]
         assert extract_artist_name_from_credits(credits) == ""
+
+
+class TestMatchScoring:
+    """Tests for the shared candidate-scoring helpers."""
+
+    def test_normalize_strips_parentheticals_and_feat(self):
+        assert normalize_for_match("Windowlicker (Remastered)") == "windowlicker"
+        assert normalize_for_match("Higher feat. Someone") == "higher"
+        assert normalize_for_match("Track [2020 Mix]") == "track"
+
+    def test_normalize_collapses_punctuation(self):
+        assert normalize_for_match("How We Feelin'?") == "how we feelin"
+
+    def test_exact_match_scores_high(self):
+        assert match_score("Aphex Twin", "Xtal", "Aphex Twin", "Xtal") == pytest.approx(1.0)
+
+    def test_decorated_variant_still_matches(self):
+        score = match_score("Aphex Twin", "Xtal (Remastered 2019)", "Aphex Twin", "Xtal")
+        assert score >= 0.9
+
+    def test_wrong_artist_scores_low(self):
+        score = match_score("Someone Else", "Xtal", "Aphex Twin", "Xtal")
+        assert score < 0.9
+
+    def test_find_best_match_picks_best_not_first(self):
+        candidates = [
+            {"artist": "Aphex Twin", "title": "Xtal (Some Other Band Cover)"},
+            {"artist": "Aphex Twin", "title": "Xtal"},
+        ]
+        best = find_best_match(
+            candidates, "Aphex Twin", "Xtal",
+            get_artist=lambda c: c["artist"], get_title=lambda c: c["title"],
+        )
+        assert best is not None
+        assert best["title"] == "Xtal"
+
+    def test_find_best_match_rejects_poor_candidates(self):
+        candidates = [{"artist": "Different Artist", "title": "Different Track"}]
+        best = find_best_match(
+            candidates, "Test Artist", "Test Track",
+            get_artist=lambda c: c["artist"], get_title=lambda c: c["title"],
+        )
+        assert best is None
+
+    def test_find_best_match_empty_candidates(self):
+        assert find_best_match(
+            [], "Artist", "Title",
+            get_artist=lambda c: "", get_title=lambda c: "",
+        ) is None

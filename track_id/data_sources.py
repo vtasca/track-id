@@ -1,11 +1,13 @@
 """Data source abstraction for unified search and enrichment."""
 
+import difflib
 import importlib.metadata
+import re
 import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -70,6 +72,72 @@ class RateLimiter:
             if remaining > 0:
                 time.sleep(remaining)
             self._last_call = time.monotonic()
+
+
+# Decorations that vary between catalogs without changing track identity.
+_PARENTHETICAL_RE = re.compile(r"[(\[][^)\]]*[)\]]")
+_FEAT_RE = re.compile(r"\b(?:feat|ft|featuring)\.?\s.*$", re.IGNORECASE)
+
+# Minimum combined score for a candidate to count as a match. Below this,
+# returning nothing beats writing another track's metadata onto the file.
+MATCH_SCORE_THRESHOLD = 0.7
+
+T = TypeVar("T")
+
+
+def normalize_for_match(s: str) -> str:
+    """Lowercase and strip decorations (parentheticals, feat. credits,
+    punctuation) that differ between catalogs for the same track."""
+    s = s.lower()
+    s = _PARENTHETICAL_RE.sub(" ", s)
+    s = _FEAT_RE.sub(" ", s)
+    s = re.sub(r"[^\w\s]", " ", s)
+    return " ".join(s.split())
+
+
+def _field_similarity(wanted: str, candidate: str) -> float:
+    """Similarity (0..1) of one field, dominated by the normalized strings.
+
+    Containment of normalized strings is treated as near-certain — "xtal"
+    inside "xtal remastered" is the same track even though the raw ratio is
+    mediocre. A small raw-string term acts as a tiebreaker so an undecorated
+    exact match outranks a decorated variant ("Xtal" beats "Xtal (Cover)").
+    """
+    wanted_norm = normalize_for_match(wanted)
+    cand_norm = normalize_for_match(candidate)
+
+    sim = difflib.SequenceMatcher(None, wanted_norm, cand_norm).ratio()
+    if wanted_norm and cand_norm and (wanted_norm in cand_norm or cand_norm in wanted_norm):
+        sim = max(sim, 0.9)
+
+    raw_sim = difflib.SequenceMatcher(None, wanted.lower(), candidate.lower()).ratio()
+    return min(1.0, 0.9 * sim + 0.1 * raw_sim)
+
+
+def match_score(candidate_artist: str, candidate_title: str, artist: str, title: str) -> float:
+    """Score (0..1) how well a candidate matches the searched artist/title."""
+    title_sim = _field_similarity(title, candidate_title)
+    artist_sim = _field_similarity(artist, candidate_artist)
+    return 0.6 * title_sim + 0.4 * artist_sim
+
+
+def find_best_match(
+    candidates: List[T],
+    artist: str,
+    title: str,
+    get_artist: Callable[[T], str],
+    get_title: Callable[[T], str],
+) -> Optional[T]:
+    """Return the highest-scoring candidate, or None if none clears the
+    match threshold. Replaces first-substring-hit matching, which picked the
+    first plausible result instead of the best one."""
+    best: Optional[T] = None
+    best_score = 0.0
+    for candidate in candidates:
+        score = match_score(get_artist(candidate), get_title(candidate), artist, title)
+        if score > best_score:
+            best, best_score = candidate, score
+    return best if best_score >= MATCH_SCORE_THRESHOLD else None
 
 
 def extract_artist_name_from_credits(artist_credits: List[Any]) -> str:

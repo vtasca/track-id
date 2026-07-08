@@ -6,6 +6,7 @@ from .data_sources import (
     DataSource,
     RateLimiter,
     extract_artist_name_from_credits,
+    find_best_match,
     make_retrying_session,
 )
 
@@ -84,23 +85,17 @@ class MusicBrainzDataSource(DataSource):
             raise Exception(f"MusicBrainz API error: {response.status_code} - {response.text}")
 
     def find_matching_track(self, search_results: Dict[str, Any], artist: str, title: str) -> Optional[Dict[str, Any]]:
-        """Find the first track result that matches the given artist and title"""
+        """Find the best-scoring recording for the given artist and title"""
         if 'recordings' not in search_results:
             return None
-        
-        # First, try to find exact track matches
-        for recording in search_results['recordings']:
-            recording_title = recording.get('title', '').lower()
-            recording_artist = extract_artist_name_from_credits(
-                recording.get('artist-credit', [])
-            ).lower()
-            
-            # Check if artist and title match (allowing partial matches)
-            if (artist.lower() in recording_artist or recording_artist in artist.lower()) and \
-               (title.lower() in recording_title or recording_title in title.lower()):
-                return recording
-        
-        return None
+
+        return find_best_match(
+            search_results['recordings'],
+            artist,
+            title,
+            get_artist=lambda r: extract_artist_name_from_credits(r.get('artist-credit', [])),
+            get_title=lambda r: r.get('title', ''),
+        )
 
     def extract_metadata(self, recording_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract metadata from MusicBrainz recording data"""

@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from .data_sources import DEFAULT_HTTP_TIMEOUT, DataSource, make_retrying_session
+from .data_sources import DEFAULT_HTTP_TIMEOUT, DataSource, find_best_match, make_retrying_session
 
 
 class BandcampDataSource(DataSource):
@@ -53,21 +53,18 @@ class BandcampDataSource(DataSource):
             raise Exception(f"Bandcamp API error: {response.status_code} - {response.text}")
 
     def find_matching_track(self, search_results: Dict[str, Any], artist: str, title: str) -> Optional[Dict[str, Any]]:
-        """Find the first track result that matches the given artist and title"""
+        """Find the best-scoring track result for the given artist and title"""
         if 'auto' not in search_results:
             return None
-        
-        # First, try to find exact track matches
-        for result in search_results['auto']['results']:
-            if result.get('type') == 't':
-                result_artist = result.get('band_name', '').lower()
-                result_title = result.get('name', '').lower()
-                
-                if (artist.lower() in result_artist or result_artist in artist.lower()) and \
-                   (title.lower() in result_title or result_title in title.lower()):
-                    return result
-        
-        return None
+
+        tracks = [r for r in search_results['auto']['results'] if r.get('type') == 't']
+        return find_best_match(
+            tracks,
+            artist,
+            title,
+            get_artist=lambda r: r.get('band_name', ''),
+            get_title=lambda r: r.get('name', ''),
+        )
 
     def extract_metadata(self, track_data: Dict[str, Any]) -> Dict[str, Any]:
         """Extract metadata from Bandcamp track data"""
