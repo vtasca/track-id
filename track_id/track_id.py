@@ -120,11 +120,15 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> N
 
 @app.command()
 def enrich(
-    file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources"),
+    file_path: str = typer.Argument(..., help="MP3 file — or directory of MP3s — to enrich with metadata from all available sources"),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite fields that already have values"),
-    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be written without modifying the file"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be written without modifying files"),
 ) -> None:
-    """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz, Discogs)"""
+    """Enrich MP3 files with metadata from all available data sources (Bandcamp, MusicBrainz, Discogs)"""
+    if Path(file_path).is_dir():
+        _enrich_directory(Path(file_path), force=force, dry_run=dry_run)
+        return
+
     try:
         with console.status("querying sources", spinner="dots", spinner_style=DL_MUTED):
             result = unified_enrich(file_path, force=force, dry_run=dry_run)
@@ -134,6 +138,46 @@ def enrich(
     except Exception as e:
         display_error(f"Error enriching MP3 file: {e}")
         raise typer.Exit(1) from None
+
+
+def _enrich_directory(directory: Path, force: bool, dry_run: bool) -> None:
+    """Enrich every MP3 under a directory, with per-file lines and a summary."""
+    from .analysis import iter_audio_files
+    from .display import display_batch_enrich_line, display_batch_enrich_summary
+
+    files = iter_audio_files(directory)
+    if not files:
+        display_warning(f"no .mp3 files found under {directory}")
+        return
+
+    section("enrich", f"{len(files)} files in {directory}")
+    enriched = skipped = unmatched = 0
+    with console.status("", spinner="dots", spinner_style=DL_MUTED) as status:
+        for i, file in enumerate(files, start=1):
+            status.update(f"enriching {i}/{len(files)}  {file.name}")
+            try:
+                result = unified_enrich(str(file), force=force, dry_run=dry_run)
+            except Exception as e:
+                display_batch_enrich_line(file.name, "unmatched", str(e))
+                unmatched += 1
+                continue
+
+            added = result['successful_enrichment']['added_metadata']
+            new_fields = {
+                k: v for k, v in added.items()
+                if not (k == 'artwork' and 'skipped' in str(v))
+            }
+            if new_fields:
+                plural = "s" if len(new_fields) != 1 else ""
+                display_batch_enrich_line(file.name, "enriched", f"+{len(new_fields)} field{plural}")
+                enriched += 1
+            else:
+                display_batch_enrich_line(file.name, "skipped", "already tagged")
+                skipped += 1
+
+    display_batch_enrich_summary(enriched, skipped, unmatched, dry_run)
+    if dry_run and enriched:
+        display_warning("dry run: no changes were written")
 
 @app.command()
 def analyze(

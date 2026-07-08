@@ -688,3 +688,31 @@ def display_rename_summary(renamed: int, unchanged: int, skipped: int, dry_run: 
     line.append(f"{skipped} skipped", style=ERROR if skipped else DL_MUTED)
     console.print(line)
     console.print()
+
+
+def display_batch_enrich_line(name: str, outcome: str, detail: str = "") -> None:
+    """One compact per-file line in a directory enrichment run.
+
+    ``outcome``: 'enriched' (✓), 'skipped' (−), or 'unmatched' (✗).
+    """
+    marks = {"enriched": (_DONE, DL_TEXT), "skipped": ("−", DL_MUTED), "unmatched": (_FAIL, ERROR)}
+    mark, name_style = marks.get(outcome, ("·", DL_MUTED))
+    line = Text()
+    line.append(f"  {mark} ", style=name_style if outcome == "unmatched" else DL_FAINT)
+    line.append(name, style=name_style)
+    if detail:
+        line.append(f"  {detail}", style=DL_MUTED)
+    console.print(line)
+
+
+def display_batch_enrich_summary(enriched: int, skipped: int, unmatched: int, dry_run: bool) -> None:
+    section("summary", mark=None)
+    line = Text()
+    verb = "would enrich" if dry_run else "enriched"
+    line.append(f"  {verb} {enriched}", style=DL_TEXT)
+    line.append("  ·  ", style=DL_FAINT)
+    line.append(f"{skipped} already tagged", style=DL_MUTED)
+    line.append("  ·  ", style=DL_FAINT)
+    line.append(f"{unmatched} unmatched", style=ERROR if unmatched else DL_MUTED)
+    console.print(line)
+    console.print()
