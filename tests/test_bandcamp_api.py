@@ -15,48 +15,48 @@ class TestBandcampAPI:
         """Create a CLI runner for testing"""
         return CliRunner()
     
-    @patch('track_id.bandcamp_api.requests.post')
-    def test_search_bandcamp_success(self, mock_post):
+    def test_search_bandcamp_success(self):
         """Test successful Bandcamp search"""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "auto": {
-                "results": [
-                    {
-                        "type": "t",
-                        "name": "Test Track",
-                        "band_name": "Test Artist",
-                        "album_name": "Test Album",
-                        "art_id": "1234567890"
-                    }
-                ]
+        source = BandcampDataSource()
+        with patch.object(source._session, "post") as mock_post:
+            # Mock successful API response
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "auto": {
+                    "results": [
+                        {
+                            "type": "t",
+                            "name": "Test Track",
+                            "band_name": "Test Artist",
+                            "album_name": "Test Album",
+                            "art_id": "1234567890"
+                        }
+                    ]
+                }
             }
-        }
-        mock_post.return_value = mock_response
-        
-        source = BandcampDataSource()
-        result = source.search("test track")
-        
-        assert result["auto"]["results"][0]["name"] == "Test Track"
-        assert result["auto"]["results"][0]["band_name"] == "Test Artist"
-        mock_post.assert_called_once()
-    
-    @patch('track_id.bandcamp_api.requests.post')
-    def test_search_bandcamp_error(self, mock_post):
+            mock_post.return_value = mock_response
+
+            result = source.search("test track")
+
+            assert result["auto"]["results"][0]["name"] == "Test Track"
+            assert result["auto"]["results"][0]["band_name"] == "Test Artist"
+            mock_post.assert_called_once()
+
+    def test_search_bandcamp_error(self):
         """Test Bandcamp search with API error"""
-        # Mock failed API response
-        mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        mock_post.return_value = mock_response
-        
         source = BandcampDataSource()
-        with pytest.raises(Exception) as exc_info:
-            source.search("test track")
-        
-        assert "Bandcamp API error: 500" in str(exc_info.value)
+        with patch.object(source._session, "post") as mock_post:
+            # Mock failed API response
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_response.text = "Internal Server Error"
+            mock_post.return_value = mock_response
+
+            with pytest.raises(Exception) as exc_info:
+                source.search("test track")
+
+            assert "Bandcamp API error: 500" in str(exc_info.value)
     
     def test_find_matching_track_success(self):
         """Test finding matching track in search results"""

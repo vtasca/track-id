@@ -18,66 +18,66 @@ class TestMusicBrainzAPI:
         return CliRunner()
     
     
-    @patch('track_id.musicbrainz_api.requests.get')
-    def test_search_musicbrainz_success(self, mock_get):
+    def test_search_musicbrainz_success(self):
         """Test successful MusicBrainz search"""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "recordings": [
-                {
-                    "id": "test-id-1",
-                    "title": "Test Track",
-                    "artist-credit": [{"name": "Test Artist"}]
-                }
-            ]
-        }
-        mock_get.return_value = mock_response
-        
         source = MusicBrainzDataSource()
-        result = source.search("test track")
-        
-        assert result["recordings"][0]["title"] == "Test Track"
-        assert result["recordings"][0]["artist-credit"][0]["name"] == "Test Artist"
-        mock_get.assert_called_once()
-    
-    @patch('track_id.musicbrainz_api.requests.get')
-    def test_search_musicbrainz_error(self, mock_get):
+        with patch.object(source._session, "get") as mock_get:
+            # Mock successful API response
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "recordings": [
+                    {
+                        "id": "test-id-1",
+                        "title": "Test Track",
+                        "artist-credit": [{"name": "Test Artist"}]
+                    }
+                ]
+            }
+            mock_get.return_value = mock_response
+
+            result = source.search("test track")
+
+            assert result["recordings"][0]["title"] == "Test Track"
+            assert result["recordings"][0]["artist-credit"][0]["name"] == "Test Artist"
+            mock_get.assert_called_once()
+
+    def test_search_musicbrainz_error(self):
         """Test MusicBrainz search with API error"""
-        # Mock failed API response
-        mock_response = Mock()
-        mock_response.status_code = 404
-        mock_response.text = "Not Found"
-        mock_get.return_value = mock_response
-        
         source = MusicBrainzDataSource()
-        with pytest.raises(Exception) as exc_info:
-            source.search("test track")
-        
-        assert "MusicBrainz API error: 404" in str(exc_info.value)
-    
-    @patch('track_id.musicbrainz_api.requests.get')
-    def test_lookup_recording_success(self, mock_get):
+        with patch.object(source._session, "get") as mock_get:
+            # Mock failed API response
+            mock_response = Mock()
+            mock_response.status_code = 404
+            mock_response.text = "Not Found"
+            mock_get.return_value = mock_response
+
+            with pytest.raises(Exception) as exc_info:
+                source.search("test track")
+
+            assert "MusicBrainz API error: 404" in str(exc_info.value)
+
+    def test_lookup_recording_success(self):
         """Test successful recording lookup"""
-        # Mock successful API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "id": "test-id-1",
-            "title": "Test Track",
-            "artist-credit": [{"name": "Test Artist"}],
-            "releases": [{"title": "Test Album", "date": "2020-01-01"}],
-            "tags": [{"name": "rock", "count": 10}]
-        }
-        mock_get.return_value = mock_response
-        
         source = MusicBrainzDataSource()
-        result = source.lookup_recording("test-id-1")
-        
-        assert result["title"] == "Test Track"
-        assert result["releases"][0]["title"] == "Test Album"
-        mock_get.assert_called_once()
+        with patch.object(source._session, "get") as mock_get:
+            # Mock successful API response
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "id": "test-id-1",
+                "title": "Test Track",
+                "artist-credit": [{"name": "Test Artist"}],
+                "releases": [{"title": "Test Album", "date": "2020-01-01"}],
+                "tags": [{"name": "rock", "count": 10}]
+            }
+            mock_get.return_value = mock_response
+
+            result = source.lookup_recording("test-id-1")
+
+            assert result["title"] == "Test Track"
+            assert result["releases"][0]["title"] == "Test Album"
+            mock_get.assert_called_once()
     
     def test_find_matching_track_success(self):
         """Test finding matching track in search results"""

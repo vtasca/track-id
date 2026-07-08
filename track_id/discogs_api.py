@@ -1,9 +1,8 @@
 """Discogs data source for music metadata enrichment."""
 
 import difflib
-import requests
 from typing import Dict, List, Optional, Any
-from .data_sources import DataSource, RateLimiter
+from .data_sources import DEFAULT_HTTP_TIMEOUT, DataSource, RateLimiter, make_retrying_session
 
 DISCOGS_API_BASE = "https://api.discogs.com"
 USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
@@ -14,7 +13,7 @@ class DiscogsDataSource(DataSource):
 
     def __init__(self):
         super().__init__("Discogs")
-        self._session = requests.Session()
+        self._session = make_retrying_session()
         self._session.headers.update({
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
@@ -25,7 +24,7 @@ class DiscogsDataSource(DataSource):
 
     def _get(self, url: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         self._rate_limiter.wait()
-        response = self._session.get(url, params=params)
+        response = self._session.get(url, params=params, timeout=DEFAULT_HTTP_TIMEOUT)
         if response.status_code == 200:
             return response.json()
         raise Exception(f"Discogs API error: {response.status_code} - {response.text[:200]}")

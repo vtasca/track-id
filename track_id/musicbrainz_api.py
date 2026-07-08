@@ -1,7 +1,12 @@
-import requests
 from typing import Dict, List, Optional, Any, Tuple, Union
 from .mp3_utils import MP3File
-from .data_sources import DataSource, RateLimiter, extract_artist_name_from_credits
+from .data_sources import (
+    DEFAULT_HTTP_TIMEOUT,
+    DataSource,
+    RateLimiter,
+    extract_artist_name_from_credits,
+    make_retrying_session,
+)
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_BASE = "https://musicbrainz.org/ws/2"
@@ -13,6 +18,7 @@ class MusicBrainzDataSource(DataSource):
 
     def __init__(self):
         super().__init__("MusicBrainz")
+        self._session = make_retrying_session()
         # MusicBrainz allows max 1 request per second; the limiter only waits
         # for the time remaining since this source's previous call.
         self._rate_limiter = RateLimiter(1.0)
@@ -34,10 +40,11 @@ class MusicBrainzDataSource(DataSource):
         # Rate limiting: MusicBrainz requires max 1 request per second
         self._rate_limiter.wait()
 
-        response = requests.get(
+        response = self._session.get(
             f'{MUSICBRAINZ_API_BASE}/{entity_type}',
             headers=headers,
-            params=params
+            params=params,
+            timeout=DEFAULT_HTTP_TIMEOUT
         )
         
         if response.status_code == 200:
@@ -64,10 +71,11 @@ class MusicBrainzDataSource(DataSource):
         # Rate limiting: MusicBrainz requires max 1 request per second
         self._rate_limiter.wait()
 
-        response = requests.get(
+        response = self._session.get(
             f'{MUSICBRAINZ_API_BASE}/recording/{recording_id}',
             headers=headers,
-            params=params
+            params=params,
+            timeout=DEFAULT_HTTP_TIMEOUT
         )
         
         if response.status_code == 200:

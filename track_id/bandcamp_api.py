@@ -1,15 +1,15 @@
-import requests
 from typing import Dict, List, Optional, Any, Tuple
 from .mp3_utils import MP3File
-from .data_sources import DataSource
+from .data_sources import DataSource, DEFAULT_HTTP_TIMEOUT, make_retrying_session
 
 
 class BandcampDataSource(DataSource):
     """Bandcamp data source implementation."""
-    
+
     def __init__(self):
         super().__init__("Bandcamp")
-    
+        self._session = make_retrying_session()
+
     def search(self, search_text: str) -> Dict[str, Any]:
         """Search for tracks on Bandcamp and return the raw API response"""
         
@@ -40,10 +40,11 @@ class BandcampDataSource(DataSource):
             'search_text': search_text
         }
 
-        response = requests.post(
+        response = self._session.post(
             'https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic',
-            headers=headers, 
-            json=payload
+            headers=headers,
+            json=payload,
+            timeout=DEFAULT_HTTP_TIMEOUT
         )
         
         if response.status_code == 200:

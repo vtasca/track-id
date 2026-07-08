@@ -5,7 +5,36 @@ import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Any, Tuple
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 from .mp3_utils import MP3File
+
+# Applied to every metadata API call so a stalled host can't hang a command;
+# enrichment runs sources in a thread pool and a hung thread blocks the merge.
+DEFAULT_HTTP_TIMEOUT = 15.0
+
+
+def make_retrying_session() -> requests.Session:
+    """Build a Session that retries transient failures (429/5xx) with backoff.
+
+    POST is included in the allowed methods because the only POST we issue is
+    Bandcamp's search, which is idempotent.
+    """
+    session = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET", "POST"}),
+        respect_retry_after_header=True,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 class RateLimiter:
