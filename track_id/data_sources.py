@@ -1,5 +1,6 @@
 """Data source abstraction for unified search and enrichment."""
 
+import importlib.metadata
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -15,6 +16,17 @@ from .mp3_utils import MP3File
 # Applied to every metadata API call so a stalled host can't hang a command;
 # enrichment runs sources in a thread pool and a hung thread blocks the merge.
 DEFAULT_HTTP_TIMEOUT = 15.0
+
+
+def _package_version() -> str:
+    try:
+        return importlib.metadata.version("track-id")
+    except importlib.metadata.PackageNotFoundError:
+        return "dev"
+
+
+# Identifying User-Agent as required by the MusicBrainz and Discogs API terms.
+USER_AGENT = f"track-id/{_package_version()} (https://github.com/vtasca/track-id)"
 
 
 def make_retrying_session() -> requests.Session:

@@ -2,10 +2,15 @@
 
 import difflib
 from typing import Dict, List, Optional, Any
-from .data_sources import DEFAULT_HTTP_TIMEOUT, DataSource, RateLimiter, make_retrying_session
+from .data_sources import (
+    DEFAULT_HTTP_TIMEOUT,
+    USER_AGENT,
+    DataSource,
+    RateLimiter,
+    make_retrying_session,
+)
 
 DISCOGS_API_BASE = "https://api.discogs.com"
-USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
 
 
 class DiscogsDataSource(DataSource):

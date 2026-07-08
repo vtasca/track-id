@@ -18,12 +18,9 @@ uv run track-id search "Artist - Title"
 uv run track-id info path/to/file.mp3
 uv run track-id enrich path/to/file.mp3
 
-# Run tests
+# Run tests (all tests are mocked — no network access needed)
 uv run pytest
 uv run pytest tests/test_bandcamp_api.py -v   # single file
-uv run pytest -m unit                          # unit tests only
-uv run pytest -m integration                   # integration tests only
-uv run pytest -m "not slow"                    # exclude slow tests
 uv run pytest --cov=track_id --cov-report=term-missing
 
 # Type checking

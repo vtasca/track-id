@@ -2,6 +2,7 @@ from typing import Dict, List, Optional, Any, Tuple, Union
 from .mp3_utils import MP3File
 from .data_sources import (
     DEFAULT_HTTP_TIMEOUT,
+    USER_AGENT,
     DataSource,
     RateLimiter,
     extract_artist_name_from_credits,
@@ -10,7 +11,6 @@ from .data_sources import (
 
 # MusicBrainz API configuration
 MUSICBRAINZ_API_BASE = "https://musicbrainz.org/ws/2"
-USER_AGENT = "track-id/1.0.0 (https://github.com/vtasca/track-id)"
 
 
 class MusicBrainzDataSource(DataSource):

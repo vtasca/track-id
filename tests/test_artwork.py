@@ -3,7 +3,6 @@ from unittest.mock import Mock, patch
 from track_id.mp3_utils import (
     download_artwork,
     get_mime_type,
-    update_mp3_metadata,
     MAX_ARTWORK_SIZE,
 )
 from track_id.bandcamp_api import BandcampDataSource

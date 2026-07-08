@@ -65,9 +65,9 @@ def root_callback(
 @app.command()
 def search(
     search_text: str = typer.Argument(..., help="The text to search for"),
-    top: int = typer.Option(3, "--top", "-t", help="Number of top results to show per source (default: 5)")
+    top: int = typer.Option(3, "--top", "-t", help="Number of top results to show per source")
 ) -> None:
-    """Search for tracks across all available data sources (Bandcamp, MusicBrainz)"""
+    """Search for tracks across all available data sources (Bandcamp, MusicBrainz, Discogs)"""
 
     try:
         results = unified_search(search_text)
@@ -94,7 +94,7 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> N
 
 @app.command()
 def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")) -> None:
-    """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz)"""
+    """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz, Discogs)"""
     try:
         result = unified_enrich(file_path)
         display_unified_enrichment_results(result)

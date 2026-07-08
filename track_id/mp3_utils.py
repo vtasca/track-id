@@ -274,22 +274,3 @@ def get_mime_type(url: str, content: bytes) -> str:
     # Default to JPEG
     return 'image/jpeg'
 
-def get_mp3_metadata(file_path: str) -> Dict[str, str]:
-    """Get existing metadata from an MP3 file (backward compatibility function)"""
-    mp3_file = MP3File(file_path)
-    return mp3_file.metadata
-
-def get_mp3_info(file_path: str) -> Dict[str, Any]:
-    """Get basic information about an MP3 file (backward compatibility function)"""
-    mp3_file = MP3File(file_path)
-    return mp3_file.info
-
-def update_mp3_metadata(file_path: str, new_metadata: Dict[str, Any], existing_metadata: Dict[str, str]) -> Dict[str, Any]:
-    """Update MP3 file with new metadata, only for fields that don't already have values (backward compatibility function)"""
-    mp3_file = MP3File(file_path)
-    return mp3_file.update_metadata(new_metadata)
-
-def parse_artist_title_from_filename(file_path: str) -> Tuple[str, str]:
-    """Parse artist and title from filename using common patterns (backward compatibility function)"""
-    mp3_file = MP3File(file_path)
-    return mp3_file.parsed_filename 
