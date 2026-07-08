@@ -439,3 +439,62 @@ class TestMatchScoring:
             [], "Artist", "Title",
             get_artist=lambda c: "", get_title=lambda c: "",
         ) is None
+
+
+class TestSearchConcurrency:
+    def test_sources_searched_in_parallel(self):
+        """Total search time is the slowest source, not the sum."""
+        import time as _time
+
+        def slow_search(*args, **kwargs):
+            _time.sleep(0.2)
+            return {}
+
+        registry = Mock()
+        sources = []
+        for name in ("A", "B", "C"):
+            s = Mock()
+            s.name = name
+            s.search.side_effect = slow_search
+            sources.append(s)
+        registry.get_all_sources.return_value = sources
+
+        start = _time.perf_counter()
+        results = search_all_sources("query", registry)
+        elapsed = _time.perf_counter() - start
+
+        assert elapsed < 0.45  # 3 x 0.2s sequential would be >= 0.6s
+        assert list(results) == ["A", "B", "C"]
+
+    def test_on_source_done_fires_for_success_and_failure(self):
+        registry = Mock()
+        ok = Mock()
+        ok.name = "OK"
+        ok.search.return_value = {"data": 1}
+        bad = Mock()
+        bad.name = "Bad"
+        bad.search.side_effect = Exception("boom")
+        registry.get_all_sources.return_value = [ok, bad]
+
+        seen = {}
+        search_all_sources("query", registry, on_source_done=lambda n, r: seen.update({n: r}))
+
+        assert seen["OK"]["success"] is True
+        assert seen["Bad"]["success"] is False
+        assert "boom" in seen["Bad"]["error"]
+
+    def test_results_in_registry_order_regardless_of_completion(self):
+        import time as _time
+
+        registry = Mock()
+        slow = Mock()
+        slow.name = "Slow"
+        slow.search.side_effect = lambda *a: _time.sleep(0.15) or {}
+        fast = Mock()
+        fast.name = "Fast"
+        fast.search.return_value = {}
+        registry.get_all_sources.return_value = [slow, fast]
+
+        results = search_all_sources("query", registry)
+
+        assert list(results) == ["Slow", "Fast"]

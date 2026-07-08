@@ -56,9 +56,10 @@ class TestTrackIdCLI:
         }
         
         result = runner.invoke(app, ["search", "test track"])
-        
+
         assert result.exit_code == 0
-        mock_search.assert_called_once_with("test track")
+        mock_search.assert_called_once()
+        assert mock_search.call_args[0][0] == "test track"
     
     @patch('track_id.track_id.unified_search')
     def test_search_command_error(self, mock_search, runner):

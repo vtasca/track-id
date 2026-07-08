@@ -1,6 +1,6 @@
 """Unified API functions that work with all available data sources."""
 
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from .bandcamp_api import BandcampDataSource
 from .data_sources import DataSourceRegistry, enrich_with_all_sources, search_all_sources
@@ -26,17 +26,21 @@ def get_registry() -> DataSourceRegistry:
     return _registry
 
 
-def search(query: str) -> Dict[str, Any]:
+def search(
+    query: str,
+    on_source_done: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+) -> Dict[str, Any]:
     """
-    Search for tracks across all available data sources.
+    Search for tracks across all available data sources concurrently.
 
     Args:
         query: The search query string
+        on_source_done: Called with (source_name, result) as each source finishes
 
     Returns:
-        Dictionary containing results from all data sources
+        Dictionary containing results from all data sources, in registry order
     """
-    return search_all_sources(query, get_registry())
+    return search_all_sources(query, get_registry(), on_source_done=on_source_done)
 
 
 def enrich(file_path: str, force: bool = False, dry_run: bool = False) -> Dict[str, Any]:

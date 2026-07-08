@@ -23,11 +23,13 @@ from .display import (
     display_racing,
     display_request,
     display_search_header,
+    display_search_sources_header,
     display_slsk_candidates,
+    display_source_search_result,
     display_unified_enrichment_results,
-    display_unified_search_results,
     display_warning,
     make_download_progress,
+    searching_text,
     section,
 )
 from .mp3_utils import MP3File
@@ -72,10 +74,30 @@ def search(
     top: int = typer.Option(3, "--top", "-t", help="Number of top results to show per source")
 ) -> None:
     """Search for tracks across all available data sources (Bandcamp, MusicBrainz, Discogs)"""
+    from .unified_api import get_registry
 
     try:
-        results = unified_search(search_text)
-        display_unified_search_results(results, top_n=top)
+        pending = [s.name for s in get_registry().get_all_sources()]
+        display_search_sources_header(len(pending))
+
+        # Sources run concurrently; print each one's results the moment it
+        # answers, while the status line names whichever are still pending.
+        shown = set()
+        with console.status(searching_text(pending), spinner="dots", spinner_style=DL_MUTED) as status:
+            def on_source_done(name: str, result: dict) -> None:
+                display_source_search_result(name, result, top_n=top)
+                shown.add(name)
+                remaining = [n for n in pending if n not in shown]
+                if remaining:
+                    status.update(searching_text(remaining))
+
+            results = unified_search(search_text, on_source_done=on_source_done)
+
+        # Anything not streamed (defensive: callback missed a source)
+        for name, result in results.items():
+            if name not in shown:
+                display_source_search_result(name, result, top_n=top)
+        console.print()
     except Exception as e:
         display_error(str(e))
         raise typer.Exit(1) from None
@@ -104,7 +126,8 @@ def enrich(
 ) -> None:
     """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz, Discogs)"""
     try:
-        result = unified_enrich(file_path, force=force, dry_run=dry_run)
+        with console.status("querying sources", spinner="dots", spinner_style=DL_MUTED):
+            result = unified_enrich(file_path, force=force, dry_run=dry_run)
         display_unified_enrichment_results(result)
         if dry_run:
             display_warning("dry run: no changes were written")
@@ -161,7 +184,8 @@ def download(
         section("enriching", str(dest))
         try:
             _strip_existing_tags(dest)
-            result = unified_enrich(str(dest))
+            with console.status("querying sources", spinner="dots", spinner_style=DL_MUTED):
+                result = unified_enrich(str(dest))
             display_unified_enrichment_results(result)
         except Exception as e:
             display_warning(f"enrichment failed: {e}")

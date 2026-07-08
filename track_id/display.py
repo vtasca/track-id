@@ -444,16 +444,34 @@ def display_search_results(data: Any, title: str, color: str = "") -> None:
     console.print()
 
 
+def searching_text(pending: List[str]) -> Text:
+    """Live status text while sources are still answering."""
+    line = Text()
+    line.append("waiting on  ", style=DL_MUTED)
+    line.append(", ".join(pending), style=DL_TEXT)
+    return line
+
+
+def display_search_sources_header(source_count: int) -> None:
+    """Top-level header for a unified search."""
+    section("search", f"{source_count} sources")
+
+
+def display_source_search_result(source_name: str, result: Dict[str, Any], top_n: int = 3) -> None:
+    """Display one source's search outcome — its summary, or its error."""
+    if result['success']:
+        display_search_summary(source_name, result['data'], top_n)
+    else:
+        section(source_name.lower(), mark=None)
+        console.print(Text(f"  {result['error']}", style=ERROR))
+
+
 def display_unified_search_results(results: Dict[str, Any], top_n: int = 3) -> None:
     """Display search results from all data sources in a clean summary format."""
-    section("search", f"{len(results)} sources")
+    display_search_sources_header(len(results))
 
     for source_name, result in results.items():
-        if result['success']:
-            display_search_summary(source_name, result['data'], top_n)
-        else:
-            section(source_name.lower(), mark=None)
-            console.print(Text(f"  {result['error']}", style=ERROR))
+        display_source_search_result(source_name, result, top_n)
     console.print()
 
 

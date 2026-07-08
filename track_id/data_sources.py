@@ -17,7 +17,9 @@ from .mp3_utils import MP3File
 
 # Applied to every metadata API call so a stalled host can't hang a command;
 # enrichment runs sources in a thread pool and a hung thread blocks the merge.
-DEFAULT_HTTP_TIMEOUT = 15.0
+# (connect, read): MusicBrainz's search cluster intermittently takes 10s+ to
+# answer, so the read timeout caps how long one slow source can gate results.
+DEFAULT_HTTP_TIMEOUT = (5.0, 10.0)
 
 
 def _package_version() -> str:
@@ -40,6 +42,9 @@ def make_retrying_session() -> requests.Session:
     session = requests.Session()
     retry = Retry(
         total=3,
+        # Never re-issue a request after a read timeout: against a hanging
+        # host that would multiply the worst-case wait by the retry count.
+        read=0,
         backoff_factor=0.5,
         status_forcelist=(429, 500, 502, 503, 504),
         allowed_methods=frozenset({"GET", "POST"}),
@@ -286,33 +291,42 @@ class DataSourceRegistry:
         return None
 
 
-def search_all_sources(search_text: str, registry: DataSourceRegistry) -> Dict[str, Any]:
-    """Search all registered data sources and return combined results.
+def search_all_sources(
+    search_text: str,
+    registry: DataSourceRegistry,
+    on_source_done: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+) -> Dict[str, Any]:
+    """Search all registered data sources concurrently and return combined results.
 
-    Run sequentially on purpose: each source makes a single request with no
-    rate-limit sleep to overlap, and the raw HTTP path serializes under the GIL
-    anyway, so a thread pool here adds complexity without reducing latency.
-    (Enrichment is different — its rate-limit sleeps do overlap, so
-    enrich_with_all_sources parallelizes.)
+    Sources are independent hosts and I/O bound, so total latency is the
+    slowest source rather than the sum — MusicBrainz alone intermittently
+    takes several seconds while the others answer in under one.
+
+    ``on_source_done(name, result)`` fires from the calling thread as each
+    source finishes, so the CLI can stream results as they arrive. The
+    returned dict is always in registry order.
     """
-    results = {}
+    sources = registry.get_all_sources()
+    if not sources:
+        return {}
 
-    for source in registry.get_all_sources():
-        try:
-            source_results = source.search(search_text)
-            results[source.name] = {
-                'success': True,
-                'data': source_results,
-                'source': source
-            }
-        except Exception as e:
-            results[source.name] = {
-                'success': False,
-                'error': str(e),
-                'source': source
-            }
+    completed: Dict[str, Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        future_to_source = {
+            executor.submit(source.search, search_text): source
+            for source in sources
+        }
+        for future in as_completed(future_to_source):
+            source = future_to_source[future]
+            try:
+                result = {'success': True, 'data': future.result(), 'source': source}
+            except Exception as e:
+                result = {'success': False, 'error': str(e), 'source': source}
+            completed[source.name] = result
+            if on_source_done:
+                on_source_done(source.name, result)
 
-    return results
+    return {source.name: completed[source.name] for source in sources}
 
 
 def enrich_with_all_sources(
