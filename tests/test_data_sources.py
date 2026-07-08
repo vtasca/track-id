@@ -92,131 +92,131 @@ class TestDataSourceRegistry:
 
 
 class TestSearchAllSources:
-    @patch("track_id.data_sources.data_source_registry")
-    def test_all_sources_succeed(self, mock_registry):
+    def test_all_sources_succeed(self):
         bc_data = {"auto": {"results": [1, 2]}}
         mb_data = {"recordings": [3]}
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", search_return=bc_data),
             _make_source("MusicBrainz", search_return=mb_data),
         ]
 
-        results = search_all_sources("Artist - Title")
+        results = search_all_sources("Artist - Title", registry)
 
         assert results["Bandcamp"]["success"] is True
         assert results["Bandcamp"]["data"] == bc_data
         assert results["MusicBrainz"]["success"] is True
         assert results["MusicBrainz"]["data"] == mb_data
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_first_source_fails_second_succeeds(self, mock_registry):
+    def test_first_source_fails_second_succeeds(self):
         mb_data = {"recordings": []}
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", search_raises=ConnectionError("timeout")),
             _make_source("MusicBrainz", search_return=mb_data),
         ]
 
-        results = search_all_sources("Artist - Title")
+        results = search_all_sources("Artist - Title", registry)
 
         assert results["Bandcamp"]["success"] is False
         assert "timeout" in results["Bandcamp"]["error"]
         assert results["MusicBrainz"]["success"] is True
         assert results["MusicBrainz"]["data"] == mb_data
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_first_source_succeeds_second_fails(self, mock_registry):
+    def test_first_source_succeeds_second_fails(self):
         bc_data = {"auto": {"results": []}}
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", search_return=bc_data),
             _make_source("MusicBrainz", search_raises=Exception("api down")),
         ]
 
-        results = search_all_sources("Artist - Title")
+        results = search_all_sources("Artist - Title", registry)
 
         assert results["Bandcamp"]["success"] is True
         assert results["MusicBrainz"]["success"] is False
         assert "api down" in results["MusicBrainz"]["error"]
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_all_sources_fail(self, mock_registry):
-        mock_registry.get_all_sources.return_value = [
+    def test_all_sources_fail(self):
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", search_raises=Exception("bc down")),
             _make_source("MusicBrainz", search_raises=Exception("mb down")),
         ]
 
-        results = search_all_sources("Artist - Title")
+        results = search_all_sources("Artist - Title", registry)
 
         assert results["Bandcamp"]["success"] is False
         assert results["MusicBrainz"]["success"] is False
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_no_sources_registered(self, mock_registry):
-        mock_registry.get_all_sources.return_value = []
+    def test_no_sources_registered(self):
+        registry = Mock()
+        registry.get_all_sources.return_value = []
 
-        results = search_all_sources("Artist - Title")
+        results = search_all_sources("Artist - Title", registry)
 
         assert results == {}
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_query_passed_through_unchanged(self, mock_registry):
+    def test_query_passed_through_unchanged(self):
         source = _make_source("Bandcamp")
-        mock_registry.get_all_sources.return_value = [source]
+        registry = Mock()
+        registry.get_all_sources.return_value = [source]
 
-        search_all_sources("Daft Punk - Harder Better Faster Stronger")
+        search_all_sources("Daft Punk - Harder Better Faster Stronger", registry)
 
         source.search.assert_called_once_with("Daft Punk - Harder Better Faster Stronger")
 
-    @patch("track_id.data_sources.data_source_registry")
-    def test_result_includes_source_reference(self, mock_registry):
+    def test_result_includes_source_reference(self):
         source = _make_source("Bandcamp", search_return={})
-        mock_registry.get_all_sources.return_value = [source]
+        registry = Mock()
+        registry.get_all_sources.return_value = [source]
 
-        results = search_all_sources("query")
+        results = search_all_sources("query", registry)
 
         assert results["Bandcamp"]["source"] is source
 
 
 class TestEnrichWithAllSources:
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_all_sources_succeed(self, mock_registry, mock_mp3_class):
+    def test_all_sources_succeed(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp"),
             _make_source("MusicBrainz"),
         ]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         assert result["all_results"]["Bandcamp"]["success"] is True
         assert result["all_results"]["MusicBrainz"]["success"] is True
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_first_source_result_is_successful_enrichment(self, mock_registry, mock_mp3_class):
+    def test_first_source_result_is_successful_enrichment(self, mock_mp3_class):
         """successful_enrichment should come from the first source in registry order."""
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp"),
             _make_source("MusicBrainz"),
         ]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         # The winning result is keyed by the first source's name.
         assert "bandcamp_track" in result["successful_enrichment"]
         assert "musicbrainz_track" not in result["successful_enrichment"]
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_first_fails_second_succeeds(self, mock_registry, mock_mp3_class):
+    def test_first_fails_second_succeeds(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", fetch_raises=Exception("not found on bc")),
             _make_source("MusicBrainz"),
         ]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         assert result["all_results"]["Bandcamp"]["success"] is False
         assert "not found on bc" in result["all_results"]["Bandcamp"]["error"]
@@ -224,90 +224,92 @@ class TestEnrichWithAllSources:
         assert "musicbrainz_track" in result["successful_enrichment"]
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_first_succeeds_second_fails(self, mock_registry, mock_mp3_class):
+    def test_first_succeeds_second_fails(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp"),
             _make_source("MusicBrainz", fetch_raises=Exception("mb api down")),
         ]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         assert result["all_results"]["Bandcamp"]["success"] is True
         assert result["all_results"]["MusicBrainz"]["success"] is False
         assert "bandcamp_track" in result["successful_enrichment"]
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_metadata_merged_first_source_wins_per_field(self, mock_registry, mock_mp3_class):
+    def test_metadata_merged_first_source_wins_per_field(self, mock_mp3_class):
         """Merged metadata is written once; first source to supply a field wins."""
         mp3 = _make_mp3()
         mock_mp3_class.return_value = mp3
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", source_metadata={"TALB": "BC Album"}),
             _make_source("MusicBrainz", source_metadata={"TALB": "MB Album", "TDRC": "2024"}),
         ]
 
-        enrich_with_all_sources("test.mp3")
+        enrich_with_all_sources("test.mp3", registry)
 
         # update_metadata is called exactly once with the merged dict.
-        mp3.update_metadata.assert_called_once_with({"TALB": "BC Album", "TDRC": "2024"})
+        mp3.update_metadata.assert_called_once_with(
+            {"TALB": "BC Album", "TDRC": "2024"}, force=False, dry_run=False
+        )
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_all_sources_fail_raises_value_error(self, mock_registry, mock_mp3_class):
+    def test_all_sources_fail_raises_value_error(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp", fetch_raises=Exception("bc down")),
             _make_source("MusicBrainz", fetch_raises=Exception("mb down")),
         ]
 
         with pytest.raises(ValueError, match="No data source could enrich"):
-            enrich_with_all_sources("test.mp3")
+            enrich_with_all_sources("test.mp3", registry)
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_no_metadata_and_no_filename_raises(self, mock_registry, mock_mp3_class):
+    def test_no_metadata_and_no_filename_raises(self, mock_mp3_class):
         mp3 = _make_mp3(artist="", title="", parsed=("", ""))
         mock_mp3_class.return_value = mp3
-        mock_registry.get_all_sources.return_value = []
+        registry = Mock()
+        registry.get_all_sources.return_value = []
 
         with pytest.raises(ValueError, match="missing artist and title metadata"):
-            enrich_with_all_sources("test.mp3")
+            enrich_with_all_sources("test.mp3", registry)
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_falls_back_to_filename_when_no_id3_tags(self, mock_registry, mock_mp3_class):
+    def test_falls_back_to_filename_when_no_id3_tags(self, mock_mp3_class):
         mp3 = _make_mp3(artist="", title="", parsed=("Parsed Artist", "Parsed Title"))
         mock_mp3_class.return_value = mp3
         source = _make_source("Bandcamp")
-        mock_registry.get_all_sources.return_value = [source]
+        registry = Mock()
+        registry.get_all_sources.return_value = [source]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         assert result["search_query"] == "Parsed Artist - Parsed Title"
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_search_query_built_from_id3_tags(self, mock_registry, mock_mp3_class):
+    def test_search_query_built_from_id3_tags(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3(artist="Burial", title="Archangel")
         source = _make_source("Bandcamp")
-        mock_registry.get_all_sources.return_value = [source]
+        registry = Mock()
+        registry.get_all_sources.return_value = [source]
 
-        result = enrich_with_all_sources("test.mp3")
+        result = enrich_with_all_sources("test.mp3", registry)
 
         assert result["search_query"] == "Burial - Archangel"
 
     @patch("track_id.data_sources.MP3File")
-    @patch("track_id.data_sources.data_source_registry")
-    def test_file_path_in_result(self, mock_registry, mock_mp3_class):
+    def test_file_path_in_result(self, mock_mp3_class):
         mock_mp3_class.return_value = _make_mp3()
-        mock_registry.get_all_sources.return_value = [
+        registry = Mock()
+        registry.get_all_sources.return_value = [
             _make_source("Bandcamp"),
         ]
 
-        result = enrich_with_all_sources("my_track.mp3")
+        result = enrich_with_all_sources("my_track.mp3", registry)
 
         assert result["file_path"] == "my_track.mp3"
 

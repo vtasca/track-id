@@ -97,11 +97,17 @@ def info(file_path: str = typer.Argument(..., help="Path to the MP3 file")) -> N
         raise typer.Exit(1) from None
 
 @app.command()
-def enrich(file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources")) -> None:
+def enrich(
+    file_path: str = typer.Argument(..., help="Path to the MP3 file to enrich with metadata from all available sources"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite fields that already have values"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be written without modifying the file"),
+) -> None:
     """Enrich an MP3 file with metadata from all available data sources (Bandcamp, MusicBrainz, Discogs)"""
     try:
-        result = unified_enrich(file_path)
+        result = unified_enrich(file_path, force=force, dry_run=dry_run)
         display_unified_enrichment_results(result)
+        if dry_run:
+            display_warning("dry run: no changes were written")
     except Exception as e:
         display_error(f"Error enriching MP3 file: {e}")
         raise typer.Exit(1) from None

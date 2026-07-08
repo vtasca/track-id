@@ -116,21 +116,29 @@ class MP3File:
         # If no pattern matches, return empty strings
         return '', ''
     
-    def update_metadata(self, new_metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def update_metadata(
+        self,
+        new_metadata: Dict[str, Any],
+        force: bool = False,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
         """
         Update MP3 file with new metadata, only for fields that don't already have values.
-        
+
         Args:
             new_metadata: Dictionary of new metadata to add
-            
+            force: Also overwrite fields that already have values
+            dry_run: Report what would be written without touching the file
+                (skips the artwork download as well)
+
         Returns:
-            Dictionary of metadata that was actually added
+            Dictionary of metadata that was (or would be) added
 
         Raises:
             TagWriteError: If there's an error updating the metadata
         """
         added_metadata = {}
-        
+
         try:
             # Load existing ID3 tags or create new ones
             try:
@@ -156,29 +164,34 @@ class MP3File:
                 # Skip artwork_url as it's handled separately
                 if key == 'artwork_url':
                     continue
-                    
-                # Only add if the field is empty in existing metadata
-                if key not in self.metadata or not self.metadata[key]:
+
+                # Only add if the field is empty in existing metadata (or force)
+                if force or key not in self.metadata or not self.metadata[key]:
                     if key in tag_classes:
-                        id3[key] = tag_classes[key](encoding=3, text=value)
+                        if not dry_run:
+                            id3[key] = tag_classes[key](encoding=3, text=value)
                         added_metadata[key] = value
                     elif key.startswith('TXXX:'):
-                        desc = key.split(':', 1)[1]
-                        id3[key] = TXXX(encoding=3, desc=desc, text=[value])
+                        if not dry_run:
+                            desc = key.split(':', 1)[1]
+                            id3[key] = TXXX(encoding=3, desc=desc, text=[value])
                         added_metadata[key] = value
-            
+
             # Handle artwork separately
             if 'artwork_url' in new_metadata and new_metadata['artwork_url']:
                 # Check if artwork already exists
                 existing_artwork = any(key.startswith('APIC') for key in id3.keys())
-                
-                if not existing_artwork:
-                    # Only add artwork if none exists
+
+                if existing_artwork and not force:
+                    added_metadata['artwork'] = 'Artwork already exists, skipped'
+                elif dry_run:
+                    added_metadata['artwork'] = 'Would add album artwork'
+                else:
                     artwork_data = download_artwork(new_metadata['artwork_url'])
                     if artwork_data:
                         # Detect MIME type
                         mime_type = get_mime_type(new_metadata['artwork_url'], artwork_data)
-                        
+
                         # Add new artwork
                         id3['APIC:'] = APIC(
                             encoding=3,
@@ -188,16 +201,14 @@ class MP3File:
                             data=artwork_data
                         )
                         added_metadata['artwork'] = f'Added album artwork ({mime_type})'
-                else:
-                    # Artwork already exists, skip adding
-                    added_metadata['artwork'] = 'Artwork already exists, skipped'
-            
-            # Save the updated tags
-            id3.save(self.file_path)
-            
-            # Invalidate metadata cache since we've updated it
-            self._metadata = None
-            
+
+            if not dry_run:
+                # Save the updated tags
+                id3.save(self.file_path)
+
+                # Invalidate metadata cache since we've updated it
+                self._metadata = None
+
             return added_metadata
             
         except Exception as e:

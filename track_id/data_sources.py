@@ -286,11 +286,7 @@ class DataSourceRegistry:
         return None
 
 
-# Global registry instance
-data_source_registry = DataSourceRegistry()
-
-
-def search_all_sources(search_text: str) -> Dict[str, Any]:
+def search_all_sources(search_text: str, registry: DataSourceRegistry) -> Dict[str, Any]:
     """Search all registered data sources and return combined results.
 
     Run sequentially on purpose: each source makes a single request with no
@@ -301,7 +297,7 @@ def search_all_sources(search_text: str) -> Dict[str, Any]:
     """
     results = {}
 
-    for source in data_source_registry.get_all_sources():
+    for source in registry.get_all_sources():
         try:
             source_results = source.search(search_text)
             results[source.name] = {
@@ -319,7 +315,12 @@ def search_all_sources(search_text: str) -> Dict[str, Any]:
     return results
 
 
-def enrich_with_all_sources(file_path: str) -> Dict[str, Any]:
+def enrich_with_all_sources(
+    file_path: str,
+    registry: DataSourceRegistry,
+    force: bool = False,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
     """Enrich an MP3 file using all available data sources.
 
     All sources are queried concurrently (they hit independent hosts and are
@@ -332,7 +333,7 @@ def enrich_with_all_sources(file_path: str) -> Dict[str, Any]:
     artist, title = resolve_artist_title(mp3_file)
     search_text = f"{artist} - {title}"
 
-    sources = data_source_registry.get_all_sources()
+    sources = registry.get_all_sources()
 
     # Snapshot existing metadata before the single write below.
     existing_metadata = dict(mp3_file.metadata)
@@ -362,7 +363,11 @@ def enrich_with_all_sources(file_path: str) -> Dict[str, Any]:
                 merged_metadata.setdefault(key, value)
 
     # Single write (and at most one artwork download) for all sources combined.
-    added_metadata = mp3_file.update_metadata(merged_metadata) if merged_metadata else {}
+    added_metadata = (
+        mp3_file.update_metadata(merged_metadata, force=force, dry_run=dry_run)
+        if merged_metadata
+        else {}
+    )
 
     # Assemble per-source results in registry order so the display ledger and
     # the "winning" source stay deterministic regardless of completion order.
