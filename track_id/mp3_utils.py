@@ -222,6 +222,57 @@ class MP3File:
         """Refresh the info cache by reloading from file."""
         self._info = None
 
+# Template fields accepted by the rename command, mapped to their ID3 frames.
+TEMPLATE_FIELDS = {
+    "artist": "TPE1",
+    "title": "TIT2",
+    "album": "TALB",
+    "year": "TDRC",
+    "genre": "TCON",
+    "track": "TRCK",
+}
+
+
+def validate_rename_template(template: str) -> None:
+    """Raise ValueError if the template references unknown fields."""
+    try:
+        template.format(**{field: "x" for field in TEMPLATE_FIELDS})
+    except KeyError as e:
+        raise ValueError(
+            f"unknown template field {{{e.args[0]}}}; "
+            f"available: {', '.join('{' + f + '}' for f in TEMPLATE_FIELDS)}"
+        ) from None
+    except (IndexError, ValueError) as e:
+        raise ValueError(f"invalid template: {e}") from None
+
+
+def build_filename_from_tags(metadata: Dict[str, str], template: str) -> str:
+    """Render a filename (no extension) from a tag template like '{artist} - {title}'.
+
+    Raises ValueError when a referenced field has no tag value — better to
+    skip a file than rename it to 'Unknown - Unknown'.
+    """
+    # Imported lazily: analysis imports nothing from here, but keep symmetry
+    # with the module's other lazy display import to avoid future cycles.
+    from .analysis import sanitize_filename
+
+    values = {
+        field: str(metadata.get(tag, "") or "").strip()
+        for field, tag in TEMPLATE_FIELDS.items()
+    }
+    missing = [
+        field for field in TEMPLATE_FIELDS
+        if f"{{{field}}}" in template and not values[field]
+    ]
+    if missing:
+        raise ValueError(f"missing tag values for: {', '.join(missing)}")
+
+    name = sanitize_filename(template.format(**values))
+    if not name:
+        raise ValueError("template produced an empty filename")
+    return name
+
+
 MAX_ARTWORK_SIZE = 10 * 1024 * 1024  # 10 MB
 
 

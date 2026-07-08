@@ -666,3 +666,25 @@ def display_doctor_report(directory: Any, results: List[Tuple["FileReport", List
     line.append(f"{len(unhealthy)} with problems", style=style)
     console.print(line)
     console.print()
+
+
+def display_rename_line(old_name: str, new_name: str, performed: bool) -> None:
+    """One 'old → new' line; faint arrow, muted when only previewing."""
+    line = Text()
+    line.append(f"  {old_name}", style=DL_MUTED)
+    line.append("  →  ", style=DL_FAINT)
+    line.append(new_name, style=DL_TEXT if performed else DL_MUTED)
+    console.print(line)
+
+
+def display_rename_summary(renamed: int, unchanged: int, skipped: int, dry_run: bool) -> None:
+    section("summary", mark=None)
+    line = Text()
+    verb = "would rename" if dry_run else "renamed"
+    line.append(f"  {verb} {renamed}", style=DL_TEXT)
+    line.append("  ·  ", style=DL_FAINT)
+    line.append(f"{unchanged} unchanged", style=DL_MUTED)
+    line.append("  ·  ", style=DL_FAINT)
+    line.append(f"{skipped} skipped", style=ERROR if skipped else DL_MUTED)
+    console.print(line)
+    console.print()

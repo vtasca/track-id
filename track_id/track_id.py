@@ -157,6 +157,64 @@ def analyze(
 
 
 @app.command()
+def rename(
+    path: Path = typer.Argument(..., help="MP3 file or directory of MP3s to rename"),
+    template: str = typer.Option(
+        "{artist} - {title}", "--template", "-t",
+        help="Filename template; fields: {artist} {title} {album} {year} {genre} {track}",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Preview renames without moving any files"),
+) -> None:
+    """Rename MP3 files from their tags using a template (default '{artist} - {title}')"""
+    from .analysis import iter_audio_files
+    from .display import display_rename_line, display_rename_summary
+    from .mp3_utils import build_filename_from_tags, validate_rename_template
+
+    try:
+        validate_rename_template(template)
+    except ValueError as e:
+        display_error(str(e))
+        raise typer.Exit(1) from None
+
+    if path.is_dir():
+        files = iter_audio_files(path)
+        if not files:
+            display_warning(f"no .mp3 files found under {path}")
+            return
+    elif path.is_file():
+        files = [path]
+    else:
+        display_error(f"'{path}' does not exist")
+        raise typer.Exit(1)
+
+    section("rename", f"{len(files)} file{'s' if len(files) != 1 else ''}")
+    renamed = unchanged = skipped = 0
+    for file in files:
+        try:
+            new_name = build_filename_from_tags(MP3File(str(file)).metadata, template)
+        except ValueError as e:
+            display_warning(f"{file.name}: {e}")
+            skipped += 1
+            continue
+
+        target = file.with_name(new_name + file.suffix)
+        if target == file:
+            unchanged += 1
+        elif target.exists():
+            display_warning(f"{file.name}: target '{target.name}' already exists")
+            skipped += 1
+        else:
+            if not dry_run:
+                file.rename(target)
+            display_rename_line(file.name, target.name, performed=not dry_run)
+            renamed += 1
+
+    display_rename_summary(renamed, unchanged, skipped, dry_run)
+    if dry_run and renamed:
+        display_warning("dry run: no files were renamed")
+
+
+@app.command()
 def doctor(
     directory: Path = typer.Argument(Path("."), help="Directory to scan (recursive)"),
     min_bitrate: int = typer.Option(192, "--min-bitrate", help="Bitrate threshold (kbps) below which files are flagged"),
