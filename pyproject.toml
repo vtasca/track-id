@@ -82,7 +82,8 @@ extend-immutable-calls = ["typer.Option", "typer.Argument"]
 python_version = "3.9"
 
 [[tool.mypy.overrides]]
-# aioslsk ships no type stubs; tomllib only exists on Python 3.11+ and is
-# imported behind a try/except ImportError in config.py.
-module = ["aioslsk.*", "tomllib"]
+# aioslsk ships no type stubs; tomllib only exists on Python 3.11+ and the
+# tomli backport only below 3.11 — both are imported behind try/except
+# ImportError in config.py, so one of the two is always missing.
+module = ["aioslsk.*", "tomllib", "tomli"]
 ignore_missing_imports = true
