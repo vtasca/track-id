@@ -1,13 +1,13 @@
 import asyncio
 import importlib.metadata
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import typer
 
 if TYPE_CHECKING:
     from .config import SoulseekConfig
-    from .soulseek_downloader import SlskResult
+    from .soulseek_downloader import SlskResult, SoulseekDownloader
 
 from .display import (
     DL_MUTED,
@@ -288,7 +288,8 @@ def doctor(
 
 @app.command()
 def download(
-    search_text: str = typer.Argument(..., help="Track to download, e.g. 'Artist - Title'"),
+    search_text: Optional[str] = typer.Argument(None, help="Track to download, e.g. 'Artist - Title'"),
+    from_file: Optional[Path] = typer.Option(None, "--from", help="Text file with one 'Artist - Title' query per line; blank lines and # comments are skipped"),
     output_dir: Path = typer.Option(Path("downloads"), "--output-dir", "-o", help="Directory to save the downloaded file"),
     min_bitrate: int = typer.Option(192, "--min-bitrate", help="Minimum acceptable bitrate in kbps"),
     search_timeout: float = typer.Option(10.0, "--timeout", "-T", help="Seconds to wait for Soulseek search results"),
@@ -297,10 +298,16 @@ def download(
     username: Optional[str] = typer.Option(None, "--username", "-u", envvar="SOULSEEK_USERNAME", help="Soulseek username", show_default=False),
     password: Optional[str] = typer.Option(None, "--password", "-p", envvar="SOULSEEK_PASSWORD", help="Soulseek password", show_default=False),
 ) -> None:
-    """Download a track from Soulseek and optionally enrich it with metadata"""
+    """Download one track — or a list of tracks via --from — from Soulseek, then enrich"""
     from .config import load_soulseek_config
     from .logging_setup import configure_logging
     from .soulseek_downloader import DownloadError
+
+    if (search_text is None) == (from_file is None):
+        display_error("provide either a search query or --from FILE (not both)")
+        raise typer.Exit(1)
+
+    queries = [search_text] if search_text else _read_batch_file(from_file)  # type: ignore[arg-type]
 
     log_file = configure_logging()
     display_log_path(log_file)
@@ -315,9 +322,9 @@ def download(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        dest = asyncio.run(
-            _download_async(
-                search_text=search_text,
+        results = asyncio.run(
+            _download_batch_async(
+                queries=queries,
                 config=config,
                 output_dir=output_dir,
                 min_bitrate=min_bitrate,
@@ -329,17 +336,83 @@ def download(
         display_error(str(e))
         raise typer.Exit(1) from None
 
-    display_download_complete(dest)
+    downloaded = [(query, dest) for query, dest, _ in results if dest is not None]
+    failed = [(query, error) for query, dest, error in results if dest is None]
 
     if enrich_after:
-        section("enriching", str(dest))
-        try:
-            _strip_existing_tags(dest)
-            with console.status("querying sources", spinner="dots", spinner_style=DL_MUTED):
-                result = unified_enrich(str(dest))
-            display_unified_enrichment_results(result)
-        except Exception as e:
-            display_warning(f"enrichment failed: {e}")
+        for _, dest in downloaded:
+            section("enriching", str(dest))
+            try:
+                _strip_existing_tags(dest)
+                with console.status("querying sources", spinner="dots", spinner_style=DL_MUTED):
+                    result = unified_enrich(str(dest))
+                display_unified_enrichment_results(result)
+            except Exception as e:
+                display_warning(f"enrichment failed: {e}")
+
+    if len(queries) > 1:
+        section("summary", mark=None)
+        for query, error in failed:
+            display_warning(f"{query}: {error}")
+        console.print(f"  downloaded {len(downloaded)} of {len(queries)} tracks")
+        console.print()
+
+    if failed and not downloaded:
+        raise typer.Exit(1)
+
+
+def _read_batch_file(path: Path) -> list:
+    """Read download queries from a file: one per line, # comments and blanks skipped."""
+    if not path.is_file():
+        display_error(f"'{path}' does not exist")
+        raise typer.Exit(1)
+
+    queries = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            queries.append(stripped)
+
+    if not queries:
+        display_error(f"no queries found in '{path}'")
+        raise typer.Exit(1)
+    return queries
+
+
+async def _download_batch_async(
+    queries: list,
+    config: "SoulseekConfig",
+    output_dir: Path,
+    min_bitrate: int,
+    search_timeout: float,
+    max_attempts: int,
+) -> list:
+    """Download several tracks over a single Soulseek connection.
+
+    Returns one ``(query, dest_or_None, error_or_None)`` tuple per query; a
+    per-track failure is recorded and the batch moves on, but a connection
+    failure propagates and aborts the run.
+    """
+    from .soulseek_downloader import DownloadError, SoulseekDownloader
+
+    results: List[Tuple[str, Optional[Path], Optional[str]]] = []
+    async with SoulseekDownloader(config, output_dir) as dl:
+        with console.status(connecting_text(), spinner="dots", spinner_style=DL_MUTED):
+            await dl.connect()
+
+        for i, query in enumerate(queries, start=1):
+            if len(queries) > 1:
+                section("track", f"{i}/{len(queries)}  {query}")
+            try:
+                dest = await _download_one(
+                    dl, query, output_dir, min_bitrate, search_timeout, max_attempts
+                )
+                display_download_complete(dest)
+                results.append((query, dest, None))
+            except (DownloadError, ValueError) as e:
+                display_error(str(e))
+                results.append((query, None, str(e)))
+    return results
 
 
 def _strip_existing_tags(path: Path) -> None:
@@ -351,78 +424,75 @@ def _strip_existing_tags(path: Path) -> None:
         pass  # no tags to strip; anything else propagates to the caller's warning
 
 
-async def _download_async(
+async def _download_one(
+    dl: "SoulseekDownloader",
     search_text: str,
-    config: "SoulseekConfig",
     output_dir: Path,
     min_bitrate: int,
     search_timeout: float,
     max_attempts: int,
 ) -> Path:
-    from .soulseek_downloader import SoulseekDownloader, _sanitize_filename
+    """Search and download one track over an already-connected downloader."""
+    from .analysis import sanitize_filename
 
     # Derive destination filename from search text
-    dest = output_dir / f"{_sanitize_filename(search_text)}.mp3"
+    dest = output_dir / f"{sanitize_filename(search_text)}.mp3"
 
-    async with SoulseekDownloader(config, output_dir) as dl:
-        with console.status(connecting_text(), spinner="dots", spinner_style=DL_MUTED):
-            await dl.connect()
+    display_search_header(search_text, search_timeout)
 
-        display_search_header(search_text, search_timeout)
+    last_progress = {"files": 0, "peers": 0}
+    with console.status(
+        collecting_text(0, 0), spinner="dots", spinner_style=DL_MUTED
+    ) as status:
+        def on_search_progress(file_count: int, peer_count: int) -> None:
+            last_progress["files"] = file_count
+            last_progress["peers"] = peer_count
+            status.update(collecting_text(file_count, peer_count))
 
-        last_progress = {"files": 0, "peers": 0}
-        with console.status(
-            collecting_text(0, 0), spinner="dots", spinner_style=DL_MUTED
-        ) as status:
-            def on_search_progress(file_count: int, peer_count: int) -> None:
-                last_progress["files"] = file_count
-                last_progress["peers"] = peer_count
-                status.update(collecting_text(file_count, peer_count))
+        candidates = await dl.search(
+            search_text,
+            timeout=search_timeout,
+            min_bitrate=min_bitrate,
+            on_progress=on_search_progress,
+        )
 
-            candidates = await dl.search(
-                search_text,
-                timeout=search_timeout,
-                min_bitrate=min_bitrate,
-                on_progress=on_search_progress,
+    if not candidates:
+        raise ValueError(f"No results found on Soulseek for '{search_text}'")
+
+    display_collected(last_progress["files"], last_progress["peers"])
+    display_slsk_candidates(candidates)
+
+    racers = candidates[:max_attempts]
+    display_racing(len(racers))
+
+    def on_attempt(c: "SlskResult") -> None:
+        display_request(c.username)
+
+    with make_download_progress() as progress:
+        task_id = progress.add_task(
+            "waiting for a slot", user="", total=None, start=False
+        )
+
+        def on_start(c: "SlskResult") -> None:
+            console.print()  # separate the racing block from the download bar
+            progress.update(
+                task_id,
+                description="downloading from",
+                user=c.username,
+                total=c.file_size or None,
             )
+            progress.start_task(task_id)
 
-        if not candidates:
-            raise ValueError(f"No results found on Soulseek for '{search_text}'")
+        def on_progress(bytes_done: int, total: Optional[int]) -> None:
+            progress.update(task_id, completed=bytes_done, total=total or None)
 
-        display_collected(last_progress["files"], last_progress["peers"])
-        display_slsk_candidates(candidates)
-
-        racers = candidates[:max_attempts]
-        display_racing(len(racers))
-
-        def on_attempt(c: "SlskResult") -> None:
-            display_request(c.username)
-
-        with make_download_progress() as progress:
-            task_id = progress.add_task(
-                "waiting for a slot", user="", total=None, start=False
-            )
-
-            def on_start(c: "SlskResult") -> None:
-                console.print()  # separate the racing block from the download bar
-                progress.update(
-                    task_id,
-                    description="downloading from",
-                    user=c.username,
-                    total=c.file_size or None,
-                )
-                progress.start_task(task_id)
-
-            def on_progress(bytes_done: int, total: Optional[int]) -> None:
-                progress.update(task_id, completed=bytes_done, total=total or None)
-
-            return await dl.race_download(
-                racers,
-                dest,
-                on_attempt=on_attempt,
-                on_start=on_start,
-                on_progress=on_progress,
-            )
+        return await dl.race_download(
+            racers,
+            dest,
+            on_attempt=on_attempt,
+            on_start=on_start,
+            on_progress=on_progress,
+        )
 
 
 if __name__ == "__main__":

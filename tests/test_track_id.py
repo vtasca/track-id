@@ -322,3 +322,57 @@ class TestTrackIdCLI:
         assert "Added album artwork" in result.output
         assert "image/jpeg" in result.output
         
+
+class TestDownloadBatchOptions:
+    @pytest.fixture
+    def runner(self):
+        return CliRunner()
+
+    def test_rejects_neither_query_nor_from(self, runner):
+        result = runner.invoke(app, ["download"])
+
+        assert result.exit_code == 1
+        assert "either a search query or --from" in result.output
+
+    def test_rejects_both_query_and_from(self, runner, tmp_path):
+        batch = tmp_path / "tracks.txt"
+        batch.write_text("Artist - Title\n")
+
+        result = runner.invoke(app, ["download", "Some - Track", "--from", str(batch)])
+
+        assert result.exit_code == 1
+        assert "not both" in result.output
+
+    def test_from_file_must_exist(self, runner):
+        result = runner.invoke(app, ["download", "--from", "no/such/list.txt"])
+
+        assert result.exit_code == 1
+        assert "does not exist" in result.output
+
+    def test_empty_batch_file_rejected(self, runner, tmp_path):
+        batch = tmp_path / "tracks.txt"
+        batch.write_text("# only a comment\n\n   \n")
+
+        result = runner.invoke(app, ["download", "--from", str(batch)])
+
+        assert result.exit_code == 1
+        assert "no queries found" in result.output
+
+
+class TestReadBatchFile:
+    def test_parses_lines_skipping_comments_and_blanks(self, tmp_path):
+        from track_id.track_id import _read_batch_file
+
+        batch = tmp_path / "tracks.txt"
+        batch.write_text(
+            "# my wishlist\n"
+            "Aphex Twin - Xtal\n"
+            "\n"
+            "  Daft Punk - Around the World  \n"
+            "# skip me\n"
+        )
+
+        assert _read_batch_file(batch) == [
+            "Aphex Twin - Xtal",
+            "Daft Punk - Around the World",
+        ]
