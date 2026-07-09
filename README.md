@@ -5,10 +5,13 @@ A Python CLI tool for music metadata enrichment, search, and download. Searches 
 
 ## Features
 
-- **Download**: Search Soulseek for a track and download the best match, with automatic metadata enrichment
+- **Download**: Search Soulseek for a track — or a whole wishlist via `--from` — and download the best match, with automatic metadata enrichment
 - **Search**: Search for tracks across Bandcamp, MusicBrainz, and Discogs
 - **Info**: Display detailed information about an MP3 file including all ID3 tags
-- **Enrich**: Automatically populate an MP3 file's metadata (artist, album, genre, label, styles, track number, artwork, etc.) from Bandcamp, MusicBrainz, and Discogs
+- **Enrich**: Automatically populate the metadata of an MP3 file — or a whole directory — (artist, album, genre, label, styles, track number, artwork, etc.) from Bandcamp, MusicBrainz, and Discogs
+- **Rename**: Rename files from their tags using a template like `{artist} - {title}`
+- **Doctor**: Scan a library for fake audio files, low bitrates, and missing tags or artwork
+- **Analyze**: Deep-inspect one file — real container format, bitrate mode, encoder, tag completeness
 
 ## Installation
 
@@ -54,6 +57,10 @@ Searches the Soulseek network, ranks candidates by bitrate and filename match, d
 track-id download "Aphex Twin - Windowlicker"
 track-id download "Burial - Archangel" --output-dir ~/Music
 track-id download "DJ Krush - Ha Doh" --min-bitrate 320 --timeout 20
+
+# Batch: one 'Artist - Title' query per line (# comments and blanks are skipped),
+# all downloaded over a single Soulseek connection
+track-id download --from tracks.txt
 ```
 
 Files are saved to `downloads/` by default. Credentials are required — set them once:
@@ -78,6 +85,7 @@ Available options:
 
 | Flag | Default | Description |
 |---|---|---|
+| `--from` | — | Text file of queries to download in one batch |
 | `--output-dir` / `-o` | `downloads/` | Directory to save the file |
 | `--min-bitrate` | `192` | Minimum acceptable bitrate in kbps |
 | `--timeout` / `-T` | `10.0` | Seconds to collect search results |
@@ -101,17 +109,49 @@ The `--top` / `-t` flag controls how many results are shown per source (default:
 track-id info "path/to/your/file.mp3"
 ```
 
-### Enrich an MP3 file with metadata
+### Enrich MP3 files with metadata
 
 Queries Bandcamp, MusicBrainz, and Discogs for a matching track and writes the retrieved metadata directly into the file's ID3 tags:
 
 ```bash
 track-id enrich "path/to/your/file.mp3"
+
+# A whole directory (recursive), with a per-file ledger and summary
+track-id enrich ~/Music/incoming/
+
+# Preview without writing, or overwrite fields that already have values
+track-id enrich "file.mp3" --dry-run
+track-id enrich "file.mp3" --force
 ```
 
-The file must have either existing `Artist` and `Title` ID3 tags, or an `Artist - Title` filename so the tool knows what to search for. All three sources are tried and their results merged — existing tags are never overwritten.
+Each file must have either existing `Artist` and `Title` ID3 tags, or an `Artist - Title` filename so the tool knows what to search for. All three sources are tried and their results merged — existing tags are never overwritten unless `--force` is passed.
 
 Tags populated across sources include: `Title`, `Artist`, `Album Artist`, `Album`, `Year`, `Track Number`, `Genre`, `Publisher/Label`, `Style` (Discogs community tags), `Artwork`, and a `Discogs URL` reference.
+
+### Rename files from their tags
+
+```bash
+track-id rename "file.mp3"                                # '{artist} - {title}'
+track-id rename ~/Music --template "{year} {artist} - {title}" --dry-run
+```
+
+Available template fields: `{artist}` `{title}` `{album}` `{year}` `{genre}` `{track}`. Files with missing tag values or name collisions are skipped, never clobbered.
+
+### Check library health
+
+```bash
+track-id doctor ~/Music --min-bitrate 256
+```
+
+Recursively flags files that aren't real audio (e.g. an HTML error page saved as `.mp3`), fall below the bitrate threshold, or lack core tags or artwork.
+
+### Analyze a single file
+
+```bash
+track-id analyze "file.mp3"
+```
+
+Reports the true container format (from magic bytes, not the extension), bitrate and CBR/VBR mode, sample rate, encoder, all tags, and any problems found.
 
 ## Development
 
@@ -146,6 +186,7 @@ track-id/
 │   ├── musicbrainz_api.py    # MusicBrainz data source
 │   ├── discogs_api.py        # Discogs data source
 │   ├── enrichment_handlers.py# Shared enrichment logic
+│   ├── analysis.py           # File inspection — format sniffing, stream/tag checks
 │   ├── soulseek_downloader.py# Soulseek download via aioslsk
 │   ├── config.py             # Credential loading (.env / env vars / config file)
 │   ├── mp3_utils.py          # MP3File class — ID3 read/write, filename parsing

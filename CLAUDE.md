@@ -14,9 +14,13 @@ uv sync
 
 # Run the CLI
 uv run track-id download "Artist - Title"
+uv run track-id download --from tracks.txt        # batch, one query per line
 uv run track-id search "Artist - Title"
 uv run track-id info path/to/file.mp3
-uv run track-id enrich path/to/file.mp3
+uv run track-id enrich path/to/file.mp3           # also accepts a directory; --dry-run/--force
+uv run track-id rename path/to/file.mp3 --template "{artist} - {title}"
+uv run track-id doctor path/to/library            # health scan
+uv run track-id analyze path/to/file.mp3          # single-file deep inspection
 
 # Run tests (all tests are mocked — no network access needed)
 uv run pytest
@@ -60,7 +64,8 @@ CLI (track_id.py)
 | `track_id/data_sources.py` | Abstract base class + registry |
 | `track_id/soulseek_downloader.py` | Soulseek P2P download via aioslsk |
 | `track_id/config.py` | Credential loading (.env / env vars / config file) |
-| `track_id/mp3_utils.py` | `MP3File` class — ID3 read/write, filename parsing |
+| `track_id/mp3_utils.py` | `MP3File` class — ID3 read/write, filename parsing, rename templates |
+| `track_id/analysis.py` | File inspection (analyze/doctor) — format sniffing, stream/tag checks |
 | `track_id/display.py` | All Rich console output |
 | `track_id/enrichment_handlers.py` | Shared logic reused by concrete data sources |
 
